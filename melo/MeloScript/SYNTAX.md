@@ -241,8 +241,20 @@ A vukernel compiles and **executes on the VM as a standard function** (software 
 vukernel add_offset(v: vec4) -> vec4 {
     return v + vec4(1.0, 1.0, 1.0, 1.0);
 }
-
 ```
+
+## Loops (`while`, `for`)
+
+MeloScript supports standard `while` condition loops and `for..in` iteration over arrays.
+
+```melo
+// Nooo, Melodie, let me go!
+var running = true;
+while (running) {
+    // trapped in an infinite loop
+}
+```
+
 Each compiled function is tagged with an is_vukernel flag in MeloFuncInfo—this will allow hooking up a real VU1 assembly backend for these functions in the future without disrupting the rest of the codegen.
 ## Keywords
 func var let struct vukernel arena if else while for in return true false
