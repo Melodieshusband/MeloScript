@@ -1,6 +1,8 @@
 #include "melo_strpool.h"
 #include <string.h>
 
+#define MELO_STRPOOL_SEED 0x241b0da5dfde0266e754ULL
+
 void melo_strpool_init(MeloStringPool *pool) {
     pool->offset = 0;
 }
