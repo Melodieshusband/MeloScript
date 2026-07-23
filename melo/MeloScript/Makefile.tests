@@ -1,0 +1,41 @@
+CC ?= gcc
+CFLAGS ?= -O0 -w -std=c11
+LDLIBS = -lm -ldl
+
+SRC = melo_lexer.c melo_parser.c melo_codegen.c melo_vm.c melo_aot.c melo_strpool.c melo_vu1.c melo_stdlib_vram.c
+LIBS_SRC = libs/melo_stdlib_pad.c libs/melo_stdlib_time.c libs/melo_stdlib_audio.c
+
+TESTS = test_lexer test_parser test_codegen test_vm test_call test_logic test_break_continue test_print test_native test_hot test_aot test_vu1_aot test_vukernel test_arena test_scratch test_soa test_struct test_vec23 test_coro test_array test_vram
+
+LIBS_TESTS = test_libs
+
+BUILD_DIR ?= build
+
+.PHONY: all clean test $(TESTS) $(LIBS_TESTS)
+
+all: $(TESTS) $(LIBS_TESTS)
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+$(TESTS): %: %.c $(SRC) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -DMELO_SRC_DIR="\"$(CURDIR)\"" -o $(BUILD_DIR)/$@ $< $(SRC) $(LDLIBS)
+
+$(LIBS_TESTS): %: libs/%.c $(SRC) $(LIBS_SRC) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -DMELO_SRC_DIR="\"$(CURDIR)\"" -o $(BUILD_DIR)/$@ $< $(SRC) $(LIBS_SRC) $(LDLIBS)
+
+test: all
+	@ok=0; fail=0; \
+	for t in $(TESTS) $(LIBS_TESTS); do \
+		if $(BUILD_DIR)/$$t > $(BUILD_DIR)/$$t.log 2>&1; then \
+			echo "PASS: $$t"; ok=$$((ok+1)); \
+		else \
+			echo "FAIL: $$t (see $(BUILD_DIR)/$$t.log)"; fail=$$((fail+1)); \
+		fi; \
+	done; \
+	echo ""; \
+	echo "$$ok passed, $$fail failed"; \
+	test $$fail -eq 0
+
+clean:
+	rm -rf $(BUILD_DIR)
