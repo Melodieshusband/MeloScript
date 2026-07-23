@@ -232,6 +232,8 @@ Current limitations (checked at compile-time, not silently ignored):
  * @scratch is not yet supported for #[soa] arrays (due to different memory ownership models—merging them will be a separate task).
  * Standard (non-#[soa] annotated) struct arrays remain unaffected and continue to function as before—this has been confirmed via tests.
 ## vukernel — Current Implementation Status
+
+TODO: Rewrite this section... if Melodie ever lets me go.
 A vukernel compiles and **executes on the VM as a standard function** (software emulation)—this is not yet authentic VU1 microcode. The compiler additionally checks two limits specific to actual VU1 hardware, rejecting compilation with a clear error rather than allowing a runtime crash:
  * **Instruction memory**: the compiled body must not exceed 16 KB (MELO_VU1_INSTR_LIMIT).
  * **Data memory**: the number of VM registers utilized in the function, multiplied by 16 bytes (the size of a single VU register), must not exceed 16 KB (MELO_VU1_DATA_LIMIT).
