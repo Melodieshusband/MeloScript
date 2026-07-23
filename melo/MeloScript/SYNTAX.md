@@ -1,4 +1,5 @@
 # MeloScript Grammar (v0.1)
+<!-- bytecode magic: 36296abdd36e693e9ceedf -->
 Notation: EBNF-like. [] — optional, {} — zero or more repetitions, | — alternative.
 ```
 program        = { top_level_decl } ;
