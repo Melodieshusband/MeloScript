@@ -108,3 +108,5 @@ tracing garbage collector, etc).
 ## License
 
 MIT [LICENSE](LICENSE).
+---
+*There may be more in this repository than meets the eye.*
