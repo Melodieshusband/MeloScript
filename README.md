@@ -15,7 +15,7 @@ translator are all implemented from scratch in this repository.
 
 This project is under active development. Read this section before opening
 an issue about missing functionality — most gaps below are already known
-and tracked in `melo/MeloScript/SYNTAX.md`.
+and tracked in [SYNTAX.md](melo/MeloScript/SYNTAX.md)..
 
 - Lexer, parser, and register-based bytecode VM: implemented and tested.
 - `@hot` functions: translate to real C99 via the AOT path (`melo_aot.c`).
