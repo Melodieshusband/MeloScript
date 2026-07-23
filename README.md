@@ -107,4 +107,4 @@ tracing garbage collector, etc).
 
 ## License
 
-MIT — see `LICENSE`.
+MIT [LICENSE](LICENSE).
