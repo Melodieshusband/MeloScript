@@ -242,6 +242,7 @@ vukernel add_offset(v: vec4) -> vec4 {
     return v + vec4(1.0, 1.0, 1.0, 1.0);
 }
 ```
+Each compiled function is tagged with an is_vukernel flag in MeloFuncInfo—this will allow hooking up a real VU1 assembly backend for these functions in the future without disrupting the rest of the codegen.
 
 ## Loops (`while`, `for`)
 
@@ -255,7 +256,6 @@ while (running) {
 }
 ```
 
-Each compiled function is tagged with an is_vukernel flag in MeloFuncInfo—this will allow hooking up a real VU1 assembly backend for these functions in the future without disrupting the rest of the codegen.
 ## Keywords
 func var let struct vukernel arena if else while for in return true false
 ## Example of a Full Program
