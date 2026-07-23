@@ -4,6 +4,10 @@
 int main(void) {
     MeloVM vm;
 
+    static const uint8_t k_test_vector[] = {
+    0xf9, 0xf4, 0x70, 0xdf, 0xe8, 0xee, 0xc4, 0x06, 0x94, 0xdc, 0x26
+};
+
     MeloInstr code[] = {
         MAKE_ABX(OP_LOADK, 0, 0),
         MAKE_ABX(OP_LOADK, 1, 1),
