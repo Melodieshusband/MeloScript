@@ -17,5 +17,11 @@ int main(int argc, char *argv[]) {
 
     scr_printf("MeloScript @hot result: %d\n", result.as.i32);
 
+    // Без этого цикла PS2/эмулятор считает программу завершённой
+    // и возвращается в BIOS (Browser Screen), поэтому текст
+    // не успевает быть замеченным - экран нужно держать активным.
+    while (1) {
+    }
+
     return 0;
 }
