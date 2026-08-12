@@ -211,6 +211,58 @@ static void test_audio_invalid_channel_is_runtime_error(void) {
     melo_codegen_free(&mod);
 }
 
+static void test_audio_loop_and_pause(void) {
+    const char *src =
+        "func main() -> int32 {\n"
+        "    audio_init();\n"
+        "    audio_play_loop(1, 0, 2048, 100, 0);\n"
+        "    var playing = audio_playing(1);\n"
+        "    audio_pause(1);\n"
+        "    var paused = audio_paused(1);\n"
+        "    var still_playing = audio_playing(1);\n"
+        "    audio_resume(1);\n"
+        "    var resumed = audio_playing(1);\n"
+        "    audio_stop(1);\n"
+        "    return playing - still_playing + paused + resumed;\n"
+        "}\n";
+    RegisterFn regs[] = { melo_stdlib_register_audio };
+    NamesFn names[] = { melo_stdlib_audio_native_names };
+
+    MeloVM vm;
+    MeloCompiledModule mod;
+    int rc = compile_and_run(src, &vm, &mod, regs, names, 1);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    assert(vm.reg_stack[0].as.i32 == 3);
+    printf("[audio_loop_and_pause] OK\n");
+    melo_codegen_free(&mod);
+}
+
+static void test_audio_volume_pan_master(void) {
+    const char *src =
+        "func main() -> int32 {\n"
+        "    audio_init();\n"
+        "    audio_play(2, 0, 512, 100, 0);\n"
+        "    audio_set_volume(2, 8000);\n"
+        "    audio_set_pan(2, -50);\n"
+        "    audio_master_volume(16383);\n"
+        "    var ok = audio_playing(2);\n"
+        "    audio_stop(2);\n"
+        "    return ok;\n"
+        "}\n";
+    RegisterFn regs[] = { melo_stdlib_register_audio };
+    NamesFn names[] = { melo_stdlib_audio_native_names };
+
+    MeloVM vm;
+    MeloCompiledModule mod;
+    int rc = compile_and_run(src, &vm, &mod, regs, names, 1);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    assert(vm.reg_stack[0].as.i32 == 1);
+    printf("[audio_volume_pan_master] OK\n");
+    melo_codegen_free(&mod);
+}
+
 static void test_all_three_libs_together(void) {
     const char *src =
         "func main() -> int32 {\n"
@@ -244,6 +296,8 @@ int main(void) {
     test_time_ticks_monotonic();
     test_audio_play_and_stop();
     test_audio_invalid_channel_is_runtime_error();
+    test_audio_loop_and_pause();
+    test_audio_volume_pan_master();
     test_all_three_libs_together();
     printf("ALL LIBS TESTS PASSED\n");
     return 0;
