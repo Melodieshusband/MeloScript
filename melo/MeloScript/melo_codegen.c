@@ -611,6 +611,38 @@ static ValueTypeHint gen_call(Codegen *cg, MeloExpr *e, int dest_reg) {
         free_regs_to(cg, mark);
         return VT_OTHER;
     }
+    if (strcmp(name, "coro_create") == 0 && e->as.call.arg_count == 1) {
+        MeloExpr *arg = e->as.call.args[0];
+        if (arg->kind != EXPR_IDENT) {
+            cg_error(cg, "coro_create() requires a direct function name argument");
+            return VT_UNKNOWN;
+        }
+        int target_func_id = find_func(cg, arg->as.ident.name);
+        if (target_func_id < 0) {
+            cg_error(cg, "coro_create() argument is not a known function");
+            return VT_UNKNOWN;
+        }
+        emit(cg, MAKE_ABC(OP_COROCREATE, dest_reg, target_func_id, 0));
+        return VT_OTHER;
+    }
+    if (strcmp(name, "resume") == 0 && e->as.call.arg_count == 2) {
+        int mark = cg->next_reg;
+        int coro_reg = alloc_reg(cg);
+        gen_expr(cg, e->as.call.args[0], coro_reg);
+        int val_reg = alloc_reg(cg);
+        gen_expr(cg, e->as.call.args[1], val_reg);
+        emit(cg, MAKE_ABC(OP_RESUME, dest_reg, coro_reg, val_reg));
+        free_regs_to(cg, mark);
+        return VT_OTHER;
+    }
+    if (strcmp(name, "coro_status") == 0 && e->as.call.arg_count == 1) {
+        int mark = cg->next_reg;
+        int coro_reg = alloc_reg(cg);
+        gen_expr(cg, e->as.call.args[0], coro_reg);
+        emit(cg, MAKE_ABC(OP_CORO_STATUS, dest_reg, coro_reg, 0));
+        free_regs_to(cg, mark);
+        return VT_INT32;
+    }
 
     int struct_id = find_struct(cg, name);
     if (struct_id >= 0) {
@@ -971,6 +1003,11 @@ static ValueTypeHint gen_expr(Codegen *cg, MeloExpr *e, int dest_reg) {
 
             if (elem_hint == VT_STRUCT) cg->last_struct_id = elem_struct_id;
             return elem_hint;
+        }
+        case EXPR_YIELD: {
+            gen_expr(cg, e->as.yield_expr.value, dest_reg);
+            emit(cg, MAKE_ABC(OP_YIELD, dest_reg, 0, 0));
+            return VT_OTHER;
         }
     }
     return VT_UNKNOWN;

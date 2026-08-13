@@ -369,6 +369,8 @@ int melo_coro_resume(MeloVM *vm, int coro_id, MeloValue resume_arg, MeloValue *o
         coro->reg_stack[0] = resume_arg;
     } else {
         coro->resume_value = resume_arg;
+        int frame_base = coro->frames[coro->frame_top].base;
+        coro->reg_stack[frame_base + coro->yield_reg] = resume_arg;
     }
 
     coro->status = MELO_CORO_RUNNING;
@@ -601,6 +603,9 @@ int melo_vm_run_coro(MeloVM *vm, int coro_id) {
         [OP_SOA_LEN] = &&L_SOA_LEN,
         [OP_ARENA_ENTER] = &&L_ARENA_ENTER,
         [OP_ARENA_EXIT] = &&L_ARENA_EXIT,
+        [OP_COROCREATE] = &&L_COROCREATE,
+        [OP_RESUME] = &&L_RESUME,
+        [OP_CORO_STATUS] = &&L_CORO_STATUS,
         [OP_PRINT] = &&L_PRINT,
         [OP_HALT] = &&L_HALT,
     };
@@ -1007,6 +1012,7 @@ L_YIELD:
         }
         coro->yield_value = R[a];
         coro->pc = pc;
+        coro->yield_reg = a;
         coro->status = MELO_CORO_SUSPENDED;
         vm->active_coroutine = prev_active_coroutine;
         return 2;
@@ -1454,6 +1460,54 @@ L_ARENA_ENTER:
 L_ARENA_EXIT:
     melo_vm_arena_exit(vm);
     if (vm->halted) return vm->error;
+    DISPATCH();
+
+L_COROCREATE:
+    {
+        int a = INSTR_A(instr);
+        int func_id = INSTR_B(instr);
+        int new_coro = melo_coro_create(vm, func_id);
+        if (new_coro < 0) {
+            melo_vm_error(vm, "failed to create coroutine");
+            goto L_HALT;
+        }
+        R[a] = melo_coro(new_coro);
+    }
+    DISPATCH();
+
+L_RESUME:
+    {
+        int a = INSTR_A(instr);
+        int coro_reg = INSTR_B(instr);
+        int val_reg = INSTR_C(instr);
+
+        if (R[coro_reg].type != MELO_CORO) {
+            melo_vm_error(vm, "resume() requires a coroutine value");
+            goto L_HALT;
+        }
+        int target_coro_id = R[coro_reg].as.i32;
+        MeloValue resume_arg = R[val_reg];
+
+        vm->active_coroutine = prev_active_coroutine;
+        int rc = melo_coro_resume(vm, target_coro_id, resume_arg, &R[a]);
+        vm->active_coroutine = coro_id >= 0 ? coro_id : -1;
+        if (rc != 0) {
+            goto L_HALT;
+        }
+    }
+    DISPATCH();
+
+L_CORO_STATUS:
+    {
+        int a = INSTR_A(instr);
+        int coro_reg = INSTR_B(instr);
+        if (R[coro_reg].type != MELO_CORO) {
+            melo_vm_error(vm, "coro_status() requires a coroutine value");
+            goto L_HALT;
+        }
+        MeloCoroStatus st = melo_coro_status(vm, R[coro_reg].as.i32);
+        R[a] = melo_int((int32_t)st);
+    }
     DISPATCH();
 
 L_HALT:

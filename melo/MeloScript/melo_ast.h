@@ -24,7 +24,8 @@ typedef enum {
     EXPR_ASSIGN,
     EXPR_CALL,
     EXPR_FIELD,
-    EXPR_INDEX
+    EXPR_INDEX,
+    EXPR_YIELD
 } MeloExprKind;
 
 typedef enum {
@@ -49,6 +50,7 @@ typedef struct MeloExpr {
         struct { struct MeloExpr *callee; struct MeloExpr **args; int arg_count; } call;
         struct { struct MeloExpr *object; char *field; } field;
         struct { struct MeloExpr *object; struct MeloExpr *index; } index;
+        struct { struct MeloExpr *value; } yield_expr;
     } as;
 } MeloExpr;
 

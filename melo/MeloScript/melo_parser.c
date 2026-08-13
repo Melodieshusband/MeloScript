@@ -120,6 +120,7 @@ static MeloTypeNode *parse_type(MeloParser *p) {
 }
 
 static MeloExpr *parse_expr(MeloParser *p);
+static MeloExpr *parse_assignment(MeloParser *p);
 
 static MeloExpr *new_expr(MeloExprKind kind, int line) {
     MeloExpr *e = calloc(1, sizeof(MeloExpr));
@@ -272,6 +273,11 @@ static MeloExpr *parse_unary(MeloParser *p) {
         MeloExpr *e = new_expr(EXPR_UNARY, line);
         e->as.unary.op = '!';
         e->as.unary.operand = parse_unary(p);
+        return e;
+    }
+    if (match_tok(p, TOK_YIELD)) {
+        MeloExpr *e = new_expr(EXPR_YIELD, line);
+        e->as.yield_expr.value = parse_assignment(p);
         return e;
     }
     return parse_postfix(p);

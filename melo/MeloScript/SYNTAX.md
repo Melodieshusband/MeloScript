@@ -206,7 +206,37 @@ melo_coro_status(&vm, coro);
 
 ```
 Calling yield outside a coroutine (i.e., in the main VM thread or a nested standard function call without creating a coroutine) results in a runtime error, not a silent no-op: this safeguards against accidental attempts to suspend execution where there is no context to resume.
-Current limitation: resume() does not yet have direct syntax within the language itself (await/resume(coro, val) as an expression)—coroutine management is exclusively available via the host C API (melo_coro_create/melo_coro_resume). Adding syntactic sugar to call it directly from the script is the next planned step.
+Coroutine management is also available directly from the language itself, as expressions, without going through the host C API:
+```melo
+func counter() -> int32 {
+    yield 1;
+    yield 2;
+    return 3;
+}
+func main() -> int32 {
+    var c = coro_create(counter);
+    var a = resume(c, 0);
+    var b = resume(c, 0);
+    var d = resume(c, 0);
+    return a * 100 + b * 10 + d;
+}
+
+```
+coro_create(funcname) takes a bare function name (not a call) and returns a coroutine handle value; resume(coro, val) resumes it, passing val into the currently suspended yield point and returning whatever value the coroutine yields or returns next; coro_status(coro) returns the same status codes as the host API (MELO_CORO_SUSPENDED, MELO_CORO_RUNNING, MELO_CORO_FINISHED, MELO_CORO_DEAD) as an int32. All three lower to dedicated opcodes (OP_COROCREATE, OP_RESUME, OP_CORO_STATUS) rather than going through the native function registry, and resume() may be called on a coroutine from within another coroutine or from the main thread interchangeably. Calling resume() on a value that isn't a coroutine handle is a runtime error, and coro_create() with an argument that isn't a known function name is a compile-time error.
+yield is also an expression, not just a statement: `var got = yield 0;` suspends the coroutine, and the value passed into the next resume(coro, val) call becomes the value of that yield expression once execution continues, so it can be assigned, used in arithmetic, or passed to another call. The bare statement form (`yield 1;` with no assignment) still works unchanged for cases where the resumed value isn't needed.
+```melo
+func echo() -> int32 {
+    var got = yield 0;
+    return got + 1;
+}
+func main() -> int32 {
+    var c = coro_create(echo);
+    var first = resume(c, 0);
+    var second = resume(c, 41);
+    return second;
+}
+
+```
 ## Struct-of-Arrays (#[soa])
 The #[soa] annotation on a struct forces the compiler to physically store arrays of this struct as parallel columns (one float array per field), rather than as an array of distinct objects—this ensures spatial locality for the L1 cache and compatibility with 128-bit SIMD loads, as detailed in the hardware analysis.
 ```melo

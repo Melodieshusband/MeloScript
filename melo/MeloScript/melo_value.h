@@ -16,7 +16,8 @@ typedef enum {
     MELO_OBJECT,
     MELO_ARRAY,
     MELO_SOA_ARRAY,
-    MELO_VRAM_TEX
+    MELO_VRAM_TEX,
+    MELO_CORO
 } MeloType;
 
 typedef enum {
@@ -152,6 +153,13 @@ static inline MeloValue melo_vram_tex(struct MeloVramTex *t) {
     MeloValue v;
     v.type = MELO_VRAM_TEX;
     v.as.vram = t;
+    return v;
+}
+
+static inline MeloValue melo_coro(int32_t coro_id) {
+    MeloValue v;
+    v.type = MELO_CORO;
+    v.as.i32 = coro_id;
     return v;
 }
 

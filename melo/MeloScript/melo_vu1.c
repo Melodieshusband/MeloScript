@@ -75,6 +75,15 @@ static void emit_vmove(MeloVu1Program *p, int fd, int fs) {
     i->lower_op = VU_LOWER_NOP;
 }
 
+static void emit_vmove_masked(MeloVu1Program *p, int fd, int fs, int mask) {
+    MeloVuInstr *i = push_instr(p);
+    if (!i) return;
+    i->upper_op = VU_UPPER_MOVE;
+    i->dest_mask = mask;
+    i->fd = fd; i->fs = fs; i->ft = 0;
+    i->lower_op = VU_LOWER_NOP;
+}
+
 static void emit_lq(MeloVu1Program *p, int ft, int is_, int16_t imm) {
     MeloVuInstr *i = push_instr(p);
     if (!i) return;
@@ -83,6 +92,38 @@ static void emit_lq(MeloVu1Program *p, int ft, int is_, int16_t imm) {
     i->ft = ft;
     i->is_ = is_;
     i->imm = imm;
+}
+
+static int eval_const_component(MeloVu1Program *p, MeloExpr *e, float *out) {
+    if (e->kind == EXPR_INT_LIT) {
+        *out = (float)e->as.ival;
+        return 0;
+    }
+    if (e->kind == EXPR_FLOAT_LIT) {
+        *out = (float)e->as.fval;
+        return 0;
+    }
+    if (e->kind == EXPR_UNARY && e->as.unary.op == '-') {
+        float inner;
+        if (eval_const_component(p, e->as.unary.operand, &inner)) return 1;
+        *out = -inner;
+        return 0;
+    }
+    vu_error(p, e->line, "vukernel vec4 literal components must be constant numeric expressions");
+    return 1;
+}
+
+static int alloc_const(MeloVu1Program *p, float x, float y, float z, float w) {
+    if (p->const_count >= 64) {
+        vu_error(p, 0, "vukernel constant pool full (max 64 vec4 constants)");
+        return -1;
+    }
+    int idx = p->const_count++;
+    p->const_pool[idx][0] = x;
+    p->const_pool[idx][1] = y;
+    p->const_pool[idx][2] = z;
+    p->const_pool[idx][3] = w;
+    return idx;
 }
 
 static void emit_sq(MeloVu1Program *p, int fs, int it, int16_t imm) {
@@ -142,12 +183,20 @@ static int compile_vec_lit(Vu1Ctx *cx, MeloExpr *e) {
         vu_error(cx->prog, e->line, "vukernel vec4 literal must have exactly 4 components");
         return -1;
     }
+    float comps[4];
+    for (int i = 0; i < 4; i++) {
+        if (eval_const_component(cx->prog, e->as.vec_ctor.args[i], &comps[i])) return -1;
+    }
+    int const_idx = alloc_const(cx->prog, comps[0], comps[1], comps[2], comps[3]);
+    if (const_idx < 0) return -1;
+
     int dst = vu_alloc_vf(cx);
     if (dst < 0) {
         vu_error(cx->prog, e->line, "out of VU1 vector registers");
         return -1;
     }
-    emit_vmove(cx->prog, dst, dst);
+    int16_t addr = (int16_t)(cx->prog->param_count + const_idx);
+    emit_lq(cx->prog, dst, 0, addr);
     return dst;
 }
 
@@ -165,6 +214,26 @@ static int compile_expr(Vu1Ctx *cx, MeloExpr *e) {
         }
         case EXPR_VEC_CTOR:
             return compile_vec_lit(cx, e);
+        case EXPR_FIELD: {
+            int src = compile_expr(cx, e->as.field.object);
+            if (src < 0) return -1;
+            int mask;
+            if (strcmp(e->as.field.field, "x") == 0) mask = VU_DEST_X;
+            else if (strcmp(e->as.field.field, "y") == 0) mask = VU_DEST_Y;
+            else if (strcmp(e->as.field.field, "z") == 0) mask = VU_DEST_Z;
+            else if (strcmp(e->as.field.field, "w") == 0) mask = VU_DEST_W;
+            else {
+                vu_error(cx->prog, e->line, "vukernel field access only supports .x/.y/.z/.w on vec4");
+                return -1;
+            }
+            int dst = vu_alloc_vf(cx);
+            if (dst < 0) {
+                vu_error(cx->prog, e->line, "out of VU1 vector registers");
+                return -1;
+            }
+            emit_vmove_masked(cx->prog, dst, src, mask);
+            return dst;
+        }
         case EXPR_BINARY: {
             int lhs = compile_expr(cx, e->as.binary.lhs);
             int rhs = compile_expr(cx, e->as.binary.rhs);
@@ -253,13 +322,14 @@ int melo_vu1_compile(MeloFuncDecl *fn, MeloVu1Program *out) {
         return 1;
     }
 
-    emit_sq(out, out->result_vf, 0, 0);
-    emit_xtop(out, 0);
-    emit_xgkick(out, 0);
+    int result_addr = out->param_count + out->const_count;
+    out->result_addr = result_addr;
+
+    emit_sq(out, out->result_vf, 0, (int16_t)result_addr);
     emit_eret(out);
 
     out->code_bytes = (size_t)out->instr_count * 8;
-    out->data_bytes = (size_t)cx.next_vf * 16;
+    out->data_bytes = (size_t)(out->param_count + out->const_count + 1) * 16;
 
     return 0;
 }
@@ -279,6 +349,16 @@ static const char *upper_mnemonic(MeloVuUpperOp op) {
     }
 }
 
+static void mask_suffix(int mask, char *out, size_t out_size) {
+    size_t off = 0;
+    if (mask & VU_DEST_X) out[off++] = 'x';
+    if (mask & VU_DEST_Y) out[off++] = 'y';
+    if (mask & VU_DEST_Z) out[off++] = 'z';
+    if (mask & VU_DEST_W) out[off++] = 'w';
+    if (off == 0 || off >= out_size) { snprintf(out, out_size, "xyzw"); return; }
+    out[off] = '\0';
+}
+
 void melo_vu1_emit_asm_listing(const MeloVu1Program *p, char *buf, size_t buf_size) {
     size_t off = 0;
     off += snprintf(buf + off, buf_size - off, "--vu\n");
@@ -293,8 +373,10 @@ void melo_vu1_emit_asm_listing(const MeloVu1Program *p, char *buf, size_t buf_si
         if (ins->upper_op == VU_UPPER_NOP) {
             snprintf(upper_str, sizeof(upper_str), "nop");
         } else if (ins->upper_op == VU_UPPER_MOVE) {
-            snprintf(upper_str, sizeof(upper_str), "%s.xyzw vf%02d, vf%02d",
-                      upper_mnemonic(ins->upper_op), ins->fd, ins->fs);
+            char suffix[8];
+            mask_suffix(ins->dest_mask, suffix, sizeof(suffix));
+            snprintf(upper_str, sizeof(upper_str), "%s.%s vf%02d, vf%02d",
+                      upper_mnemonic(ins->upper_op), suffix, ins->fd, ins->fs);
         } else {
             snprintf(upper_str, sizeof(upper_str), "%s.xyzw vf%02d, vf%02d, vf%02d",
                       upper_mnemonic(ins->upper_op), ins->fd, ins->fs, ins->ft);
@@ -406,35 +488,37 @@ void melo_vu1_emit_c_bridge(const MeloVu1Program *p, char *buf, size_t buf_size)
         p->name, p->name);
 
     off += snprintf(buf + off, buf_size - off,
-        "static int melo_vu1_%s_loaded = 0;\n\n", p->name);
-
-    off += snprintf(buf + off, buf_size - off,
-        "static void melo_vu1_%s_upload(void) {\n"
-        "    packet2_t *pkt = packet2_create(64, P2_TYPE_NORMAL, P2_MODE_NORMAL, 0);\n"
-        "    packet2_vif_add_micro_program(pkt, 0, melo_vu1_%s_microcode, melo_vu1_%s_microcode_qwc * 16);\n"
-        "    dma_channel_send_packet2(pkt, DMA_CHANNEL_VIF1, 1);\n"
-        "    dma_wait_fast();\n"
-        "    packet2_free(pkt);\n"
-        "    melo_vu1_%s_loaded = 1;\n"
-        "}\n\n",
-        p->name, p->name, p->name, p->name);
+        "/* VU1 instruction memory is mapped on the EE at 0x11008000 (16KB);\n"
+        " * VU1 data memory is mapped at 0x1100C000 (16KB). Both are only safe\n"
+        " * to touch from the EE while VU1 is idle, i.e. after the DMA transfer\n"
+        " * that kicked the microprogram has completed and VU1 has finished\n"
+        " * executing (vu1 has no path back to the EE other than these mapped\n"
+        " * windows or an explicit XGKICK to the GS, which this function does\n"
+        " * not use since it returns a value to the caller rather than\n"
+        " * rendering geometry). */\n"
+        "#define MELO_VU1_DATA_MEM_BASE 0x1100C000u\n"
+        "#define MELO_VU1_RESULT_ADDR   %d\n\n",
+        p->result_addr);
 
     off += snprintf(buf + off, buf_size - off,
         "MeloValue melo_vu1_call_%s(const MeloValue *args, int argc) {\n"
-        "    if (!melo_vu1_%s_loaded) melo_vu1_%s_upload();\n\n"
-        "    packet2_t *pkt = packet2_create(32, P2_TYPE_NORMAL, P2_MODE_NORMAL, 0);\n"
+        "    packet2_t *pkt = packet2_create(64, P2_TYPE_NORMAL, P2_MODE_NORMAL, 0);\n\n"
+        "    packet2_vif_add_micro_program(pkt, 0, melo_vu1_%s_microcode,\n"
+        "        melo_vu1_%s_microcode + melo_vu1_%s_microcode_qwc * 2);\n\n"
         "    for (int i = 0; i < argc && i < %d; i++) {\n"
         "        packet2_utils_vu_add_unpack_data(pkt, i, (void *)&args[i].as.v4, 1, 0);\n"
-        "    }\n"
-        "    packet2_vif_add_micro_program(pkt, 0, NULL, 0);\n"
+        "    }\n\n"
         "    dma_channel_send_packet2(pkt, DMA_CHANNEL_VIF1, 1);\n"
         "    dma_wait_fast();\n"
         "    packet2_free(pkt);\n\n"
-        "    MeloVec4 result MELO_ALIGN16;\n"
-        "    (void)result;\n\n"
-        "    return melo_vec4(0.0f, 0.0f, 0.0f, 0.0f);\n"
+        "    /* VU1 is idle again now that the DMA transfer (which included the\n"
+        "     * MSCAL that ran the microprogram to completion) has finished, so\n"
+        "     * the mapped data memory window can be read directly. */\n"
+        "    volatile float *vu1_data = (volatile float *)MELO_VU1_DATA_MEM_BASE;\n"
+        "    volatile float *slot = vu1_data + (MELO_VU1_RESULT_ADDR * 4);\n"
+        "    return melo_vec4(slot[0], slot[1], slot[2], slot[3]);\n"
         "}\n",
-        p->name, p->name, p->name, p->param_count);
+        p->name, p->name, p->name, p->name, p->param_count);
 
     (void)off;
 }

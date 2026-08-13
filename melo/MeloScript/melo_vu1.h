@@ -70,7 +70,11 @@ typedef struct {
     char param_names[8][32];
     int param_vf[8];
 
+    float const_pool[64][4];
+    int const_count;
+
     int result_vf;
+    int result_addr;
     int has_error;
     char error_msg[256];
 

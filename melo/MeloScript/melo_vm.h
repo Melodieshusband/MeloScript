@@ -111,6 +111,7 @@ typedef struct {
 
     MeloValue yield_value;
     MeloValue resume_value;
+    int yield_reg;
 } MeloCoroutine;
 
 struct MeloVM {
