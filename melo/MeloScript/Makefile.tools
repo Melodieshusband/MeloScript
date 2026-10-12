@@ -1,0 +1,19 @@
+CC ?= gcc
+CFLAGS ?= -O2 -w -std=c11
+LDLIBS = -lm -ldl
+
+SRC = melo_lexer.c melo_parser.c melo_codegen.c melo_vm.c melo_aot.c melo_strpool.c melo_vu1.c melo_stdlib_vram.c melo_image.c
+LIBS_SRC = libs/melo_stdlib_pad.c libs/melo_stdlib_time.c libs/melo_stdlib_audio.c libs/melo_stdlib_size.c
+
+BUILD_DIR ?= build
+
+.PHONY: all clean
+
+all: $(BUILD_DIR)/melorun
+
+$(BUILD_DIR)/melorun: melo_run.c $(SRC) $(LIBS_SRC)
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ melo_run.c $(SRC) $(LIBS_SRC) $(LDLIBS)
+
+clean:
+	rm -f $(BUILD_DIR)/melorun
