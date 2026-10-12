@@ -3,11 +3,11 @@ CFLAGS ?= -O0 -w -std=c11
 LDLIBS = -lm -ldl
 
 SRC = melo_lexer.c melo_parser.c melo_codegen.c melo_vm.c melo_aot.c melo_strpool.c melo_vu1.c melo_stdlib_vram.c
-LIBS_SRC = libs/melo_stdlib_pad.c libs/melo_stdlib_time.c libs/melo_stdlib_audio.c
+LIBS_SRC = libs/melo_stdlib_pad.c libs/melo_stdlib_time.c libs/melo_stdlib_audio.c libs/melo_stdlib_size.c
 
 TESTS = test_lexer test_parser test_codegen test_vm test_call test_logic test_break_continue test_print test_native test_hot test_aot test_vu1_aot test_vukernel test_vu1_codegen test_arena test_scratch test_soa test_struct test_vec23 test_coro test_resume test_yield_expr test_array test_vram
 
-LIBS_TESTS = test_libs
+LIBS_TESTS = test_libs test_size
 
 BUILD_DIR ?= build
 

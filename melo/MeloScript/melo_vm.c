@@ -392,6 +392,7 @@ int melo_coro_resume(MeloVM *vm, int coro_id, MeloValue resume_arg, MeloValue *o
 void melo_vm_init(MeloVM *vm, MeloInstr *code, size_t code_len) {
     memset(vm, 0, sizeof(MeloVM));
     vm->code = code;
+    vm->code_base = code;
     vm->code_len = code_len;
     vm->frame_top = 0;
     vm->frames[0].base = 0;

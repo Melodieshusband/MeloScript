@@ -116,6 +116,7 @@ typedef struct {
 
 struct MeloVM {
     MeloInstr *code;
+    MeloInstr *code_base;
     size_t code_len;
 
     MeloValue consts[MELO_MAX_CONSTS];
