@@ -316,3 +316,14 @@ func main() {
 }
 
 ```
+
+## Size and Integrity Functions (melo_stdlib_size)
+
+An optional native module in `libs/melo_stdlib_size.c`. It must be registered with `melo_stdlib_register_size(vm)` and its names passed to `melo_codegen_compile_with_natives` via `melo_stdlib_size_native_names`.
+
+ * bytes_of(value) -> int32 — logical payload size in bytes: int32/float 4, vec2 8, vec3 12, vec4 16, string length, nil 0. Arrays and structs return the sum of their elements. SoA arrays return length * field_count * 4. VRAM textures return their allocated byte size.
+ * bits_of(value) -> int32 — bytes_of(value) * 8.
+ * script_bytes() -> int32 — size of the loaded bytecode in bytes (instruction count * 4). Constants are not included.
+ * script_hash() -> int32 — FNV-1a hash of the bytecode words, masked to 31 bits so the result is always a non-negative int32 literal.
+
+Anti-tamper usage: the expected hash is written into the script as an integer literal. Integer literals live in the constant pool and are not part of the hashed bytecode, so changing the literal does not change the hash. Compile once with a placeholder, read script_hash(), then substitute the real value and recompile. Any edit to the bytecode itself changes the hash. Constants and strings are not covered, and a patched comparison or a patched native defeats the check, so treat it as one layer among several, not as protection by itself.
