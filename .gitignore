@@ -1,0 +1,7 @@
+out/
+melo/MeloScript/build/
+melo/bridge2/*.o
+melo/bridge2/*.elf
+melo/bridge2/demo_image.c
+melo/bridge2/melo2c
+melo/bridge2/hello_gen.c
