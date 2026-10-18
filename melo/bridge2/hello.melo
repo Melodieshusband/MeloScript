@@ -3,6 +3,11 @@ func add_ints(a: int32, b: int32) -> int32 {
     return a + b;
 }
 
+@hot
+func add_vecs(a: vec4, b: vec4) -> vec4 {
+    return a + b;
+}
+
 func main() -> int32 {
     return add_ints(19, 23);
 }

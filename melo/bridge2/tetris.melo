@@ -1,0 +1,484 @@
+func piece_x(p: int32, r: int32, i: int32) -> int32 {
+    if (p == 0) {
+        if (r == 0 || r == 2) {
+            if (i == 0) { return 0; }
+            if (i == 1) { return 1; }
+            if (i == 2) { return 2; }
+            return 3;
+        }
+        return 1;
+    }
+    if (p == 1) {
+        if (i == 0 || i == 2) { return 1; }
+        return 2;
+    }
+    if (p == 2) {
+        if (r == 0) {
+            if (i == 0 || i == 2) { return 1; }
+            if (i == 1) { return 0; }
+            return 2;
+        }
+        if (r == 1) {
+            if (i == 0 || i == 1 || i == 3) { return 1; }
+            return 2;
+        }
+        if (r == 2) {
+            if (i == 0) { return 0; }
+            if (i == 1 || i == 3) { return 1; }
+            return 2;
+        }
+        if (i == 0 || i == 2 || i == 3) { return 1; }
+        return 0;
+    }
+    if (p == 3) {
+        if (r == 0 || r == 2) {
+            if (i == 0 || i == 3) { return 1; }
+            if (i == 1) { return 2; }
+            return 0;
+        }
+        if (i == 0 || i == 1) { return 1; }
+        return 2;
+    }
+    if (p == 4) {
+        if (r == 0 || r == 2) {
+            if (i == 0) { return 0; }
+            if (i == 1 || i == 2) { return 1; }
+            return 2;
+        }
+        if (i == 0) { return 2; }
+        if (i == 1 || i == 2) { return 1; }
+        return 1;
+    }
+    if (p == 5) {
+        if (r == 0) {
+            if (i == 0 || i == 1) { return 0; }
+            if (i == 2) { return 1; }
+            return 2;
+        }
+        if (r == 1) {
+            if (i == 0 || i == 2 || i == 3) { return 1; }
+            return 2;
+        }
+        if (r == 2) {
+            if (i == 0) { return 0; }
+            if (i == 1) { return 1; }
+            return 2;
+        }
+        if (i == 0 || i == 1 || i == 3) { return 1; }
+        return 0;
+    }
+    if (r == 0) {
+        if (i == 0 || i == 3) { return 2; }
+        if (i == 1) { return 0; }
+        return 1;
+    }
+    if (r == 1) {
+        if (i == 0 || i == 1 || i == 2) { return 1; }
+        return 2;
+    }
+    if (r == 2) {
+        if (i == 0) { return 0; }
+        if (i == 1) { return 1; }
+        if (i == 2) { return 2; }
+        return 0;
+    }
+    if (i == 0 || i == 3) { return 0; }
+    return 1;
+}
+
+func piece_y(p: int32, r: int32, i: int32) -> int32 {
+    if (p == 0) {
+        if (r == 0 || r == 2) { return 1; }
+        return i;
+    }
+    if (p == 1) {
+        if (i == 0 || i == 1) { return 0; }
+        return 1;
+    }
+    if (p == 2) {
+        if (r == 0) {
+            if (i == 0) { return 0; }
+            return 1;
+        }
+        if (r == 1) {
+            if (i == 0) { return 0; }
+            if (i == 1 || i == 2) { return 1; }
+            return 2;
+        }
+        if (r == 2) {
+            if (i == 3) { return 2; }
+            return 1;
+        }
+        if (i == 0) { return 0; }
+        if (i == 1 || i == 2) { return 1; }
+        return 2;
+    }
+    if (p == 3) {
+        if (r == 0 || r == 2) {
+            if (i == 0 || i == 1) { return 0; }
+            return 1;
+        }
+        if (i == 0) { return 0; }
+        if (i == 1 || i == 2) { return 1; }
+        return 2;
+    }
+    if (p == 4) {
+        if (r == 0 || r == 2) {
+            if (i == 0 || i == 1) { return 0; }
+            return 1;
+        }
+        if (i == 0) { return 0; }
+        if (i == 1 || i == 2) { return 1; }
+        return 2;
+    }
+    if (p == 5) {
+        if (r == 0) {
+            if (i == 0) { return 0; }
+            return 1;
+        }
+        if (r == 1) {
+            if (i == 0 || i == 1) { return 0; }
+            if (i == 2) { return 1; }
+            return 2;
+        }
+        if (r == 2) {
+            if (i == 3) { return 2; }
+            return 1;
+        }
+        if (i == 0) { return 0; }
+        if (i == 1) { return 1; }
+        return 2;
+    }
+    if (r == 0) {
+        if (i == 0) { return 0; }
+        return 1;
+    }
+    if (r == 1) {
+        if (i == 0) { return 0; }
+        if (i == 1) { return 1; }
+        return 2;
+    }
+    if (r == 2) {
+        if (i == 3) { return 2; }
+        return 1;
+    }
+    if (i == 0 || i == 1) { return 0; }
+    if (i == 2) { return 1; }
+    return 2;
+}
+
+func check_collision(b: array<int32>, p: int32, r: int32, px: int32, py: int32) -> int32 {
+    var i = 0;
+    while (i < 4) {
+        var bx = px + piece_x(p, r, i);
+        var by = py + piece_y(p, r, i);
+        if (bx < 0 || bx >= 10 || by < 0 || by >= 20) {
+            return 1;
+        }
+        if (b[by * 10 + bx] != 0) {
+            return 1;
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+func lock_piece(b: array<int32>, p: int32, r: int32, px: int32, py: int32) {
+    var i = 0;
+    while (i < 4) {
+        var bx = px + piece_x(p, r, i);
+        var by = py + piece_y(p, r, i);
+        if (bx >= 0 && bx < 10 && by >= 0 && by < 20) {
+            b[by * 10 + bx] = p + 1;
+        }
+        i = i + 1;
+    }
+}
+
+func clear_lines(b: array<int32>) -> int32 {
+    var cleared = 0;
+    var y = 19;
+    while (y >= 0) {
+        var full = 1;
+        var x = 0;
+        while (x < 10) {
+            if (b[y * 10 + x] == 0) {
+                full = 0;
+            }
+            x = x + 1;
+        }
+        if (full == 1) {
+            cleared = cleared + 1;
+            var row = y;
+            while (row > 0) {
+                var c = 0;
+                while (c < 10) {
+                    b[row * 10 + c] = b[(row - 1) * 10 + c];
+                    c = c + 1;
+                }
+                row = row - 1;
+            }
+            var top_c = 0;
+            while (top_c < 10) {
+                b[top_c] = 0;
+                top_c = top_c + 1;
+            }
+        } else {
+            y = y - 1;
+        }
+    }
+    return cleared;
+}
+
+func is_current_block(p: int32, r: int32, px: int32, py: int32, x: int32, y: int32) -> int32 {
+    var i = 0;
+    while (i < 4) {
+        var bx = px + piece_x(p, r, i);
+        var by = py + piece_y(p, r, i);
+        if (bx == x && by == y) {
+            return 1;
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+func draw_game(b: array<int32>, p: int32, r: int32, px: int32, py: int32, next_p: int32, score: int32, lines: int32, level: int32, game_over: int32) {
+    scr_set_xy(8, 1);
+    scr_set_color(16777215);
+    scr_print("=== MELOSCRIPT TETRIS (PS2) ===");
+
+    scr_set_xy(8, 2);
+    scr_set_color(65535);
+    scr_print("+--------------------+");
+
+    var y = 0;
+    while (y < 20) {
+        scr_set_xy(8, 3 + y);
+        scr_set_color(65535);
+        scr_print("|");
+
+        var x = 0;
+        while (x < 10) {
+            var curr = is_current_block(p, r, px, py, x, y);
+            if (curr == 1) {
+                scr_set_color(16776960);
+                scr_print("[]");
+            } else {
+                var cell = b[y * 10 + x];
+                if (cell != 0) {
+                    scr_set_color(65280);
+                    scr_print("[]");
+                } else {
+                    scr_set_color(8421504);
+                    scr_print(" .");
+                }
+            }
+            x = x + 1;
+        }
+
+        scr_set_color(65535);
+        scr_print("|");
+        y = y + 1;
+    }
+
+    scr_set_xy(8, 23);
+    scr_set_color(65535);
+    scr_print("+--------------------+");
+
+    scr_set_color(16777215);
+    scr_set_xy(33, 4);
+    scr_print("SCORE: ");
+    scr_print_num(score);
+
+    scr_set_xy(33, 6);
+    scr_print("LINES: ");
+    scr_print_num(lines);
+
+    scr_set_xy(33, 8);
+    scr_print("LEVEL: ");
+    scr_print_num(level);
+
+    scr_set_xy(33, 11);
+    scr_set_color(16776960);
+    scr_print("NEXT PIECE:");
+
+    var ny = 0;
+    while (ny < 3) {
+        scr_set_xy(33, 13 + ny);
+        var nx = 0;
+        while (nx < 4) {
+            var is_nb = 0;
+            var ni = 0;
+            while (ni < 4) {
+                var nbx = piece_x(next_p, 0, ni);
+                var nby = piece_y(next_p, 0, ni);
+                if (nbx == nx && nby == ny) {
+                    is_nb = 1;
+                }
+                ni = ni + 1;
+            }
+            if (is_nb == 1) {
+                scr_set_color(16776960);
+                scr_print("[]");
+            } else {
+                scr_print("  ");
+            }
+            nx = nx + 1;
+        }
+        ny = ny + 1;
+    }
+
+    scr_set_color(16777215);
+    scr_set_xy(33, 17);
+    scr_print("CONTROLS:");
+    scr_set_xy(33, 18);
+    scr_print("D-PAD LEFT/RIGHT: MOVE");
+    scr_set_xy(33, 19);
+    scr_print("D-PAD DOWN: SOFT DROP");
+    scr_set_xy(33, 20);
+    scr_print("CROSS / UP: ROTATE");
+    scr_set_xy(33, 21);
+    scr_print("CIRCLE: HARD DROP");
+    scr_set_xy(33, 22);
+    scr_print("START: RESTART");
+
+    if (game_over == 1) {
+        scr_set_color(16711680);
+        scr_set_xy(8, 24);
+        scr_print("*** GAME OVER! PRESS START ***");
+    } else {
+        scr_set_xy(8, 24);
+        scr_print("                              ");
+    }
+}
+
+func main() -> int32 {
+    var board = array<int32, 200>();
+    var i = 0;
+    while (i < 200) {
+        board[i] = 0;
+        i = i + 1;
+    }
+
+    scr_clear();
+
+    var p = sys_rand(7);
+    var next_p = sys_rand(7);
+    var r = 0;
+    var px = 3;
+    var py = 0;
+    var score = 0;
+    var lines = 0;
+    var level = 1;
+    var game_over = 0;
+    var drop_counter = 0;
+    var drop_interval = 12;
+
+    while (1 == 1) {
+        pad_poll();
+
+        if (game_over == 1) {
+            draw_game(board, p, r, px, py, next_p, score, lines, level, 1);
+            if (pad_btn_start() == 1) {
+                var ri = 0;
+                while (ri < 200) {
+                    board[ri] = 0;
+                    ri = ri + 1;
+                }
+                score = 0;
+                lines = 0;
+                level = 1;
+                game_over = 0;
+                p = sys_rand(7);
+                next_p = sys_rand(7);
+                r = 0;
+                px = 3;
+                py = 0;
+                drop_counter = 0;
+                drop_interval = 12;
+                scr_clear();
+            }
+            sys_sleep_ms(30);
+        } else {
+            if (pad_btn_left() == 1) {
+                if (check_collision(board, p, r, px - 1, py) == 0) {
+                    px = px - 1;
+                }
+            }
+            if (pad_btn_right() == 1) {
+                if (check_collision(board, p, r, px + 1, py) == 0) {
+                    px = px + 1;
+                }
+            }
+            if (pad_btn_rotate() == 1) {
+                var next_r = (r + 1) % 4;
+                if (check_collision(board, p, next_r, px, py) == 0) {
+                    r = next_r;
+                }
+            }
+            if (pad_btn_down() == 1) {
+                if (check_collision(board, p, r, px, py + 1) == 0) {
+                    py = py + 1;
+                    score = score + 1;
+                }
+            }
+            if (pad_btn_drop() == 1) {
+                while (check_collision(board, p, r, px, py + 1) == 0) {
+                    py = py + 1;
+                    score = score + 2;
+                }
+                lock_piece(board, p, r, px, py);
+                var c = clear_lines(board);
+                if (c == 1) { score = score + 100; }
+                if (c == 2) { score = score + 300; }
+                if (c == 3) { score = score + 500; }
+                if (c >= 4) { score = score + 800; }
+                lines = lines + c;
+                level = (lines / 10) + 1;
+                drop_interval = 14 - level;
+                if (drop_interval < 2) { drop_interval = 2; }
+                p = next_p;
+                next_p = sys_rand(7);
+                r = 0;
+                px = 3;
+                py = 0;
+                if (check_collision(board, p, r, px, py) == 1) {
+                    game_over = 1;
+                }
+                drop_counter = 0;
+            }
+
+            drop_counter = drop_counter + 1;
+            if (drop_counter >= drop_interval) {
+                drop_counter = 0;
+                if (check_collision(board, p, r, px, py + 1) == 0) {
+                    py = py + 1;
+                } else {
+                    lock_piece(board, p, r, px, py);
+                    var cleared = clear_lines(board);
+                    if (cleared == 1) { score = score + 100; }
+                    if (cleared == 2) { score = score + 300; }
+                    if (cleared == 3) { score = score + 500; }
+                    if (cleared >= 4) { score = score + 800; }
+                    lines = lines + cleared;
+                    level = (lines / 10) + 1;
+                    drop_interval = 14 - level;
+                    if (drop_interval < 2) { drop_interval = 2; }
+                    p = next_p;
+                    next_p = sys_rand(7);
+                    r = 0;
+                    px = 3;
+                    py = 0;
+                    if (check_collision(board, p, r, px, py) == 1) {
+                        game_over = 1;
+                    }
+                }
+            }
+
+            draw_game(board, p, r, px, py, next_p, score, lines, level, 0);
+            sys_sleep_ms(35);
+        }
+    }
+    return 0;
+}

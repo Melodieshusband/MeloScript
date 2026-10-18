@@ -1,0 +1,34 @@
+// hud_text.melo
+// Готовит HUD-данные (счёт, judgement) и выводит их на экран через
+// нативную функцию scr_print, зарегистрированную на стороне C
+// (обёртка над init_scr()/scr_printf() из PS2SDK debug.h).
+//
+// print() здесь не подходит: он пишет только в лог VM/теста,
+// а не на реальный экран PS2 — экран рисуется через GS,
+// и scr_printf — самый простой встроенный способ вывести
+// растровый текст без написания своего bitmap-font рендерера.
+
+func draw_score(score: int32) {
+    scr_print(score);
+}
+
+func draw_judgement(code: int32) {
+    // 0 = sick, 1 = good, 2 = bad, 3 = miss
+    scr_print(code);
+}
+
+func main() {
+    var score = 0;
+    var combo = 0;
+
+    // имитация нескольких нот подряд — каждая обновляет HUD
+    var i = 0;
+    while (i < 5) {
+        score = score + 100;
+        combo = combo + 1;
+        draw_score(score);
+        i = i + 1;
+    }
+
+    draw_judgement(0);
+}
