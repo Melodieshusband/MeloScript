@@ -1,0 +1,6 @@
+[value_sizes] OK
+[script_size_positive] OK (16 bytes)
+[integrity_check] OK (hash=734145710)
+VM ERROR: bytes_of(value) requires one argument
+[arg_errors] OK (bytes_of(value) requires one argument)
+ALL SIZE TESTS PASSED

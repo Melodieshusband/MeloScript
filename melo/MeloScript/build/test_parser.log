@@ -1,0 +1,48 @@
+Parsed 3 top-level declarations:
+
+struct Particle {
+  position: vec3
+  velocity: vec3
+}
+
+func update(p: Particle, dt: float) -> vec3
+  Block
+    VarDecl(v: void)
+      Field(.velocity)
+        Ident(p)
+    Return
+      Binary(op=0)
+        Field(.position)
+          Ident(p)
+        Binary(op=2)
+          Ident(v)
+          Ident(dt)
+
+func main() -> void
+  Block
+    VarDecl(a: void)
+      VecCtor(vec4)
+        Float(1.000)
+        Float(2.000)
+        Float(3.000)
+        Float(0.000)
+    VarDecl(b: void)
+      VecCtor(vec4)
+        Float(4.000)
+        Float(5.000)
+        Float(6.000)
+        Float(0.000)
+    VarDecl(d: void)
+      Call
+        Ident(vdot)
+        Ident(a)
+        Ident(b)
+    If
+      Binary(op=9)
+        Ident(d)
+        Float(0.000)
+      Block
+        Return
+    Return
+
+OK: parsed without errors

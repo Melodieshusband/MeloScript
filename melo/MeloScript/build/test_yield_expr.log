@@ -1,0 +1,6 @@
+[var_bound_yield_receives_resume_value_via_host_api] OK (got 41, returned 42)
+[var_bound_yield_from_script_via_resume] OK (result=42)
+[yield_expr_in_arithmetic] OK (result=42)
+[multiple_var_bound_yields_in_sequence] OK (result=60)
+[bare_yield_statement_still_works] OK (1, 2, 3 unaffected by grammar change)
+ALL YIELD-AS-EXPRESSION TESTS PASSED

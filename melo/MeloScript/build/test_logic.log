@@ -1,0 +1,11 @@
+[and_true_true] OK (1)
+[and_true_false] OK (0)
+[or_false_true] OK (1)
+[or_false_false] OK (0)
+[not_true] OK (1)
+[not_false] OK (0)
+[and_short_circuits_rhs] OK (0)
+[or_short_circuits_rhs] OK (1)
+[combined_condition] OK (42)
+
+ALL LOGIC TESTS PASSED

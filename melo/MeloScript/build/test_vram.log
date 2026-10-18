@@ -1,0 +1,19 @@
+[vram_alloc_starts_evicted] OK
+[vram_upload_makes_resident] OK
+[vram_evict_after_upload] OK
+[vram_tracks_resident_bytes] OK (resident=262144 bytes)
+VM ERROR: VRAM exhausted (4MB eDRAM limit exceeded)
+[vram_exhaustion] OK (VRAM exhausted (4MB eDRAM limit exceeded))
+[vram_free_reclaims_space] OK
+VM ERROR: upload(tex) requires a @vram texture value
+[vram_reject_non_texture_upload] OK (upload(tex) requires a @vram texture value)
+[vram_annotation_auto_uploads] OK
+[vram_annotation_preserves_texture_value] OK
+CODEGEN ERROR: @vram may only be used on a variable initialized with vram_alloc(...) or vram_alloc_paletted(...)
+[vram_annotation_rejects_non_vram_alloc_init] OK (@vram may only be used on a variable initialized with vram_alloc(...) or vram_alloc_paletted(...))
+CODEGEN ERROR: @vram may only be used on a variable initialized with vram_alloc(...) or vram_alloc_paletted(...)
+[vram_annotation_rejects_other_call_init] OK (@vram may only be used on a variable initialized with vram_alloc(...) or vram_alloc_paletted(...))
+[vram_paletted_4bit] OK
+[vram_paletted_8bit] OK
+
+ALL VRAM TESTS PASSED

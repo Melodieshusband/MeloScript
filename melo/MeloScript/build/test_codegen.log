@@ -1,0 +1,17 @@
+Compiled 10 instructions, 2 functions, 1 constants
+main() returned float 49.00
+OK: function calls + float arithmetic
+
+Compiled 8 instructions, 1 functions, 2 constants
+main() returned float 32.00
+OK: vector construction + vdot
+
+Compiled 18 instructions, 1 functions, 3 constants
+main() returned int32 45
+OK: while loop
+
+Compiled 11 instructions, 1 functions, 4 constants
+main() returned int32 1
+OK: if/else branching
+
+ALL TESTS PASSED

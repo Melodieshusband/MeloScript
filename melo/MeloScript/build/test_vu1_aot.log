@@ -1,0 +1,57 @@
+=== generated VU1 unit for 'add_offset' ===
+/*
+--vu
+-- vukernel add_offset : VLIW microcode (5 instructions, 40 bytes)
+    nop                                    lq vf01, 0(vi00)
+    nop                                    lq vf02, 1(vi00)
+    vadd.xyzw vf03, vf01, vf02             nop
+    nop                                    sq vf03, 2(vi00)
+    nop                                    eret [E]
+--endvu
+*/
+
+u64 melo_vu1_add_offset_microcode[] MELO_ALIGN16 = {
+    0x5e01000002010000ULL,
+    0x5e02000002020001ULL,
+    0x51e208c000000000ULL,
+    0x5e00180006030002ULL,
+    0x5e000000fe00003bULL,
+};
+const int melo_vu1_add_offset_microcode_qwc = 5;
+
+#include <tamtypes.h>
+#include <kernel.h>
+#include <vif_codes.h>
+#include <packet2.h>
+#include <packet2_utils.h>
+#include "melo_value.h"
+
+extern u64 melo_vu1_add_offset_microcode[];
+extern const int melo_vu1_add_offset_microcode_qwc;
+
+
+#define MELO_VU1_xgkick 0
+#define MELO_VU1_DATA_MEM_BASE 0x1100C000u
+#define MELO_VU1_RESULT_ADDR   2
+
+MeloValue melo_vu1_call_add_offset(const MeloValue *args, int argc) {
+    packet2_t *pkt = packet2_create(64, P2_TYPE_NORMAL, P2_MODE_NORMAL, 0);
+
+    packet2_vif_add_micro_program(pkt, 0, melo_vu1_add_offset_microcode,
+        melo_vu1_add_offset_microcode + melo_vu1_add_offset_microcode_qwc * 2);
+
+    for (int i = 0; i < argc && i < 1; i++) {
+        packet2_utils_vu_add_unpack_data(pkt, i, (void *)&args[i].as.v4, 1, 0);
+    }
+
+    dma_channel_send_packet2(pkt, DMA_CHANNEL_VIF1, 1);
+    dma_wait_fast();
+    packet2_free(pkt);
+
+    
+    volatile float *vu1_data = (volatile float *)MELO_VU1_DATA_MEM_BASE;
+    volatile float *slot = vu1_data + (MELO_VU1_RESULT_ADDR * 4);
+    return melo_vec4(slot[0], slot[1], slot[2], slot[3]);
+}
+
+VU1 AOT TEST PASSED

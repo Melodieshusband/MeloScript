@@ -1,0 +1,23 @@
+--- generated C for add_ints ---
+MeloValue melo_hot_add_ints(const MeloValue *melo_args) {
+    int32_t a = melo_args[0].as.i32;
+    int32_t b = melo_args[1].as.i32;
+    return melo_int((int32_t)((a + b)));
+}
+
+AOT-backed add_ints(19,23) via VM call = 42
+OK: int32 @hot function executed via AOT path
+
+--- generated C for add_vecs ---
+MeloValue melo_hot_add_vecs(const MeloValue *melo_args) {
+    MeloVec3 a = melo_args[0].as.v3;
+    MeloVec3 b = melo_args[1].as.v3;
+    return melo_aot_wrap_vec3(melo_aot_vec3_add(a, b));
+}
+
+AOT-backed add_vecs sum-of-components = 66.00
+OK: vec3 @hot function executed via AOT path
+
+OK: AOT translator rejected call to non-@hot function (AOT translate error in 'bad' (line 4): @hot functions may only call other @hot functions)
+
+ALL AOT TESTS PASSED

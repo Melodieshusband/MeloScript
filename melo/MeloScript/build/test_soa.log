@@ -1,0 +1,11 @@
+[soa_basic_read] OK (particles[1].x+y=7)
+[soa_write] OK (result=100)
+[soa_len] OK (len=5)
+[soa_vector_fields] OK (result=104)
+[soa_rejects_nested_struct_fields] OK (#[soa] structs currently only support float/int32/vec2/vec3/vec4 fields)
+[soa_rejects_non_constructor_elements] OK (#[soa] array elements must be struct constructor calls)
+[non_soa_struct_array_still_works] OK (regular struct arrays unaffected, result=5)
+VM ERROR: SoA array index out of bounds
+[soa_index_out_of_bounds] OK (SoA array index out of bounds)
+[soa_opcode_used] OK (NEWARRAY_SOA and SOA_GETFIELD emitted)
+ALL SOA TESTS PASSED

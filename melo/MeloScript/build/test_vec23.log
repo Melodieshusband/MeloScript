@@ -1,0 +1,12 @@
+[vec2_const_type_tag] OK (x+y=7)
+[vec3_const_component_access] OK (sum=6)
+[vec3_rejects_w_component] OK (invalid vector component (expected x/y/z/w within the vector's size))
+[vec2_add_preserves_rank] OK (sum=33)
+[vec3_normalize_preserves_rank] OK (n.x*5=3)
+[vec3_scale_preserves_rank] OK (sum=12)
+[vec2_non_const_ctor] OK (sum=5)
+[vec4_non_const_ctor_all_components] OK (sum=10)
+[vec_component_assignment] OK (sum=103)
+[vec_field_access_on_non_vector_rejected] OK (field access on a non-struct value)
+[vec2_dot_product] OK (dot=0)
+ALL VEC2/VEC3 TESTS PASSED

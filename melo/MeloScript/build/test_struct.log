@@ -1,0 +1,10 @@
+[struct_field_read] OK (3)
+[struct_field_write] OK (12)
+[struct_as_param] OK (9)
+[struct_vec_fields] OK (27)
+[multiple_independent_instances] OK (102)
+[wrong_arg_count] OK (CODEGEN ERROR: struct constructor argument count does not match field count)
+[unknown_field] OK (CODEGEN ERROR: access to unknown struct field)
+[field_access_on_non_struct] OK (CODEGEN ERROR: field access on a non-struct value)
+
+ALL STRUCT TESTS PASSED

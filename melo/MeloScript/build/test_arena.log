@@ -1,0 +1,5 @@
+[single_arena] OK
+[nested_arena] OK
+[direct_api] OK
+[nesting_limit] OK (correctly rejected at depth 16)
+ALL ARENA TESTS PASSED

@@ -1,0 +1,11 @@
+[native_basic_call] OK (add10(5)=15)
+[native_two_args] OK (sum2(3,4)=7)
+[native_multiple_registered] OK (result=13)
+VM ERROR: native_fail_always always fails
+[native_call_failure_halts_vm] OK (native_fail_always always fails)
+[native_unknown_name_is_codegen_error] OK (call to undefined function)
+[native_too_many_args_rejected] OK (too many arguments in native function call)
+[native_registration_limits] OK (registered=64, cap=64)
+[native_duplicate_name_rejected] OK
+[native_find] OK
+ALL NATIVE TESTS PASSED

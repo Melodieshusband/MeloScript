@@ -1,0 +1,4 @@
+vec4 sum = (5.00, 7.00, 9.00, 0.00)
+dot product = 32.00
+alignof(MeloVec4) = 16
+OK

@@ -1,0 +1,8 @@
+[vukernel_basic_execution] OK (result=(2.0,3.0,4.0,5.0), 1 vukernel registered)
+[regular_func_not_marked_vukernel] OK
+[vukernel_instruction_limit_exceeded] OK (vukernel 'huge' exceeds VU1 instruction memory: 24016 bytes > 16384 byte limit)
+[vukernel_requires_return_type] OK (parser correctly rejected missing '->')
+[vu0_kernel_basic] OK
+[vu0_kernel_instruction_limit_exceeded] OK (vukernel 'huge_vu0' exceeds VU0 instruction memory: 9616 bytes > 4096 byte limit)
+[double_type_prohibited] OK (type 'double' is prohibited on PS2: use 'float' (32-bit single precision) (got ')'))
+ALL VUKERNEL TESTS PASSED

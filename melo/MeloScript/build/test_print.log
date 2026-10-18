@@ -1,0 +1,17 @@
+--- expected output: Hello World ---
+Hello World
+--- end output ---
+[hello_world] OK
+--- expected output: 42 / 3.5 / (1, 2, 3, 4) ---
+42
+3.5
+(1, 2, 3, 4)
+--- end output ---
+[print_numbers] OK
+--- expected output: line1 / line2\ttabbed"quoted" ---
+line1
+line2	tabbed"quoted"
+--- end output ---
+[escape_sequences] OK
+[string_dedup] OK (1 constant for 2 identical literals)
+ALL STRING/PRINT TESTS PASSED

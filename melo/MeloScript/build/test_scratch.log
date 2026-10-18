@@ -1,0 +1,16 @@
+[scratch_array_basic] OK (sum=50, scratch_used=144)
+[scratch_alignment] OK
+[scratch_struct] OK (sum=6)
+[scratch_isolated_from_object_heap] OK (scratch=80, heap=80)
+[scratch_overflow] OK (allocated 7 chunks before exhaustion, used=14448/16384)
+VM ERROR: scratchpad exhausted (16KB SPR limit exceeded)
+[scratch_overflow_at_source_level] OK (VM ERROR: scratchpad exhausted (16KB SPR limit exceeded))
+[scratch_reset] OK (reused same address after reset)
+CODEGEN ERROR: @scratch may only be used on array or struct variable declarations
+[scratch_rejects_scalar] OK (@scratch may only be used on array or struct variable declarations)
+CODEGEN ERROR: @scratch may only be used on array or struct variable declarations
+[scratch_rejects_vec4] OK (@scratch may only be used on array or struct variable declarations)
+[scratch_opcode_used] OK (OP_NEWARRAY_SCRATCH emitted)
+[scratch_base_mapping] OK
+[scratch_dma_in_and_out] OK (result=1009)
+ALL SCRATCH TESTS PASSED

@@ -1,0 +1,9 @@
+[resume_expr_drives_coroutine_from_script] OK (result=123)
+[resume_accepts_argument_value] OK (result=1)
+[yield_register_receives_resume_value_via_host_api] OK (frame_base=0 yield_reg=0)
+[coro_status_from_script] OK (s0=1 s1=1 s2=3)
+[resume_on_non_coroutine_is_error] OK (resume of unknown coroutine)
+CODEGEN ERROR: reference to undefined variable
+[coro_create_unknown_function_is_compile_error] OK
+[resume_independent_coroutines_from_script] OK
+ALL RESUME-AS-EXPRESSION TESTS PASSED

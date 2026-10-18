@@ -1,0 +1,14 @@
+[pad_init_and_poll] OK
+VM ERROR: pad_buttons: port must be 0-1 and slot must be 0-3
+[pad_invalid_port_is_runtime_error] OK (pad_buttons: port must be 0-1 and slot must be 0-3)
+[pad_stick_range] OK (stick=0.000000)
+[time_vsync_and_delta] OK (delta=0.000001)
+[time_ticks_monotonic] OK
+[audio_play_and_stop] OK
+VM ERROR: audio_play: channel out of range (0-23)
+[audio_invalid_channel_is_runtime_error] OK (audio_play: channel out of range (0-23))
+[all_three_libs_together] OK
+[math_i64] OK
+[math_fixed] OK (1.5 * 2.0 = 3)
+[math_helpers] OK (sum=52)
+ALL LIBS TESTS PASSED

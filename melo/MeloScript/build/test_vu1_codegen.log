@@ -1,0 +1,6 @@
+[vec4_constant_is_loaded_not_moved_into_itself] OK (const=(1.0,2.0,3.0,4.0), loaded via lq at addr 1)
+[result_address_does_not_collide_with_params] OK (result_addr=1, param_count=1)
+[no_xgkick_emitted_for_value_returning_kernel] OK (eret present, xgkick absent)
+[field_access_generates_masked_move] OK (.x lowered to vmove.x)
+[field_access_invalid_component_is_error] OK (VU1 codegen error in 'bad_field' (line 2): vukernel field access only supports .x/.y/.z/.w on vec4)
+ALL VU1 CODEGEN FIX TESTS PASSED

@@ -1,0 +1,10 @@
+[coro_single_yield] OK (1, 2, 3 in sequence, then finished)
+[coro_no_yield_runs_to_completion] OK (result=42)
+[coro_resume_after_finish_fails] OK (cannot resume a finished or dead coroutine)
+[coro_yield_outside_coroutine_is_error] OK (yield used outside of a coroutine)
+[coro_multiple_independent_coroutines] OK (independent state confirmed)
+[coro_status_transitions] OK
+[coro_in_script_basic] OK (sum=60)
+[coro_in_script_status] OK
+[coro_in_script_interleaved] OK (interleaved sum=3300)
+ALL COROUTINE TESTS PASSED

@@ -1,0 +1,11 @@
+main() returned int32 42
+OK: @hot int32 function uses OP_ADDI
+
+main() returned float 5.00
+OK: @hot float function uses OP_ADDF/OP_SUBF/OP_MULF
+
+OK: @hot function without return type rejected (@hot function 'broken2' requires an explicit return type ('-> type'))
+
+OK: @hot call count tracked (5 calls)
+
+ALL HOT TESTS PASSED
