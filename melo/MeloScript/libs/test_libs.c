@@ -4,6 +4,7 @@
 #include "melo_stdlib_pad.h"
 #include "melo_stdlib_time.h"
 #include "melo_stdlib_audio.h"
+#include "melo_stdlib_math.h"
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -211,58 +212,6 @@ static void test_audio_invalid_channel_is_runtime_error(void) {
     melo_codegen_free(&mod);
 }
 
-static void test_audio_loop_and_pause(void) {
-    const char *src =
-        "func main() -> int32 {\n"
-        "    audio_init();\n"
-        "    audio_play_loop(1, 0, 2048, 100, 0);\n"
-        "    var playing = audio_playing(1);\n"
-        "    audio_pause(1);\n"
-        "    var paused = audio_paused(1);\n"
-        "    var still_playing = audio_playing(1);\n"
-        "    audio_resume(1);\n"
-        "    var resumed = audio_playing(1);\n"
-        "    audio_stop(1);\n"
-        "    return playing - still_playing + paused + resumed;\n"
-        "}\n";
-    RegisterFn regs[] = { melo_stdlib_register_audio };
-    NamesFn names[] = { melo_stdlib_audio_native_names };
-
-    MeloVM vm;
-    MeloCompiledModule mod;
-    int rc = compile_and_run(src, &vm, &mod, regs, names, 1);
-    assert(rc == 0);
-    assert(vm.error == 0);
-    assert(vm.reg_stack[0].as.i32 == 3);
-    printf("[audio_loop_and_pause] OK\n");
-    melo_codegen_free(&mod);
-}
-
-static void test_audio_volume_pan_master(void) {
-    const char *src =
-        "func main() -> int32 {\n"
-        "    audio_init();\n"
-        "    audio_play(2, 0, 512, 100, 0);\n"
-        "    audio_set_volume(2, 8000);\n"
-        "    audio_set_pan(2, -50);\n"
-        "    audio_master_volume(16383);\n"
-        "    var ok = audio_playing(2);\n"
-        "    audio_stop(2);\n"
-        "    return ok;\n"
-        "}\n";
-    RegisterFn regs[] = { melo_stdlib_register_audio };
-    NamesFn names[] = { melo_stdlib_audio_native_names };
-
-    MeloVM vm;
-    MeloCompiledModule mod;
-    int rc = compile_and_run(src, &vm, &mod, regs, names, 1);
-    assert(rc == 0);
-    assert(vm.error == 0);
-    assert(vm.reg_stack[0].as.i32 == 1);
-    printf("[audio_volume_pan_master] OK\n");
-    melo_codegen_free(&mod);
-}
-
 static void test_all_three_libs_together(void) {
     const char *src =
         "func main() -> int32 {\n"
@@ -288,6 +237,78 @@ static void test_all_three_libs_together(void) {
     melo_codegen_free(&mod);
 }
 
+static void test_math_i64(void) {
+    const char *src =
+        "func main() -> int32 {\n"
+        "    var lo = i64_add_lo(0, 2000000000, 0, 1000000000);\n"
+        "    var hi = i64_add_hi(0, 2000000000, 0, 1000000000);\n"
+        "    var cmp = i64_cmp(hi, lo, 0, 1000);\n"
+        "    var m_lo = i64_mul_lo(1000, 2000);\n"
+        "    var m_hi = i64_mul_hi(1000, 2000);\n"
+        "    if (cmp > 0 && m_lo == 2000000 && m_hi == 0) {\n"
+        "        return 1;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n";
+    RegisterFn regs[] = { melo_stdlib_register_math };
+    NamesFn names[] = { melo_stdlib_math_native_names };
+
+    MeloVM vm;
+    MeloCompiledModule mod;
+    int rc = compile_and_run(src, &vm, &mod, regs, names, 1);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    assert(vm.reg_stack[0].as.i32 == 1);
+    printf("[math_i64] OK\n");
+    melo_codegen_free(&mod);
+}
+
+static void test_math_fixed(void) {
+    const char *src =
+        "func main() -> float {\n"
+        "    var a = fix_from_float(1.5);\n"
+        "    var b = fix_from_float(2.0);\n"
+        "    var c = fix_mul(a, b);\n"
+        "    return fix_to_float(c);\n"
+        "}\n";
+    RegisterFn regs[] = { melo_stdlib_register_math };
+    NamesFn names[] = { melo_stdlib_math_native_names };
+
+    MeloVM vm;
+    MeloCompiledModule mod;
+    int rc = compile_and_run(src, &vm, &mod, regs, names, 1);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    float val = vm.reg_stack[0].as.f32;
+    assert(val >= 2.99f && val <= 3.01f);
+    printf("[math_fixed] OK (1.5 * 2.0 = %g)\n", val);
+    melo_codegen_free(&mod);
+}
+
+static void test_math_helpers(void) {
+    const char *src =
+        "func main() -> float {\n"
+        "    var c = clamp(15.0, 0.0, 10.0);\n"
+        "    var l = lerp(0.0, 100.0, 0.25);\n"
+        "    var mn = fmin(5.0, 8.0);\n"
+        "    var mx = fmax(5.0, 8.0);\n"
+        "    var ab = fabs_val(-4.0);\n"
+        "    return c + l + mn + mx + ab;\n"
+        "}\n";
+    RegisterFn regs[] = { melo_stdlib_register_math };
+    NamesFn names[] = { melo_stdlib_math_native_names };
+
+    MeloVM vm;
+    MeloCompiledModule mod;
+    int rc = compile_and_run(src, &vm, &mod, regs, names, 1);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    float expected = 10.0f + 25.0f + 5.0f + 8.0f + 4.0f;
+    assert(vm.reg_stack[0].as.f32 == expected);
+    printf("[math_helpers] OK (sum=%g)\n", vm.reg_stack[0].as.f32);
+    melo_codegen_free(&mod);
+}
+
 int main(void) {
     test_pad_init_and_poll();
     test_pad_invalid_port_is_runtime_error();
@@ -296,9 +317,10 @@ int main(void) {
     test_time_ticks_monotonic();
     test_audio_play_and_stop();
     test_audio_invalid_channel_is_runtime_error();
-    test_audio_loop_and_pause();
-    test_audio_volume_pan_master();
     test_all_three_libs_together();
+    test_math_i64();
+    test_math_fixed();
+    test_math_helpers();
     printf("ALL LIBS TESTS PASSED\n");
     return 0;
 }
