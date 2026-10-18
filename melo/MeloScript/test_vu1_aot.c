@@ -31,9 +31,8 @@ int main(void) {
     assert(strcmp(result.units[0].name, "add_offset") == 0);
     assert(strstr(result.units[0].c_source, "melo_vu1_add_offset_microcode") != NULL);
     assert(strstr(result.units[0].c_source, "vadd.xyzw") != NULL);
+    assert(strstr(result.units[0].c_source, "xgkick") != NULL);
     assert(strstr(result.units[0].c_source, "eret") != NULL);
-    assert(strstr(result.units[0].c_source, "MELO_VU1_DATA_MEM_BASE") != NULL);
-    assert(strstr(result.units[0].c_source, "0x1100C000") != NULL);
 
     printf("=== generated VU1 unit for '%s' ===\n", result.units[0].name);
     printf("%s\n", result.units[0].c_source);

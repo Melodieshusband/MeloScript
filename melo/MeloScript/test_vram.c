@@ -236,6 +236,43 @@ static void test_vram_annotation_rejects_other_call_init(void) {
     melo_codegen_free(&mod);
 }
 
+static void test_vram_paletted_4bit(void) {
+    const char *src =
+        "func main() -> int32 {\n"
+        "    var tex = vram_alloc_paletted(256, 256, 4);\n"
+        "    upload(tex);\n"
+        "    var b = vram_bpp(tex);\n"
+        "    var s = vram_size(tex);\n"
+        "    evict(tex);\n"
+        "    vram_free(tex);\n"
+        "    return b;\n"
+        "}\n";
+    MeloVM vm;
+    MeloCompiledModule mod;
+    int rc = compile_and_run_vram(src, &vm, &mod);
+    assert(rc == 0);
+    assert(vm.reg_stack[0].as.i32 == 4);
+    printf("[vram_paletted_4bit] OK\n");
+    melo_codegen_free(&mod);
+}
+
+static void test_vram_paletted_8bit(void) {
+    const char *src =
+        "func main() -> int32 {\n"
+        "    @vram var tex = vram_alloc_paletted(128, 128, 8);\n"
+        "    var r = resident(tex);\n"
+        "    var b = vram_bpp(tex);\n"
+        "    return r + b;\n"
+        "}\n";
+    MeloVM vm;
+    MeloCompiledModule mod;
+    int rc = compile_and_run_vram(src, &vm, &mod);
+    assert(rc == 0);
+    assert(vm.reg_stack[0].as.i32 == 9);
+    printf("[vram_paletted_8bit] OK\n");
+    melo_codegen_free(&mod);
+}
+
 int main(void) {
     test_vram_alloc_starts_evicted();
     test_vram_upload_makes_resident();
@@ -248,6 +285,8 @@ int main(void) {
     test_vram_annotation_preserves_texture_value();
     test_vram_annotation_rejects_non_vram_alloc_init();
     test_vram_annotation_rejects_other_call_init();
+    test_vram_paletted_4bit();
+    test_vram_paletted_8bit();
     printf("\nALL VRAM TESTS PASSED\n");
     return 0;
 }

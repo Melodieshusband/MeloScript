@@ -2,6 +2,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#if defined(MELO_PS2_TARGET) || defined(_EE)
+#include <kernel.h>
+#endif
 
 static void melo_vm_error(MeloVM *vm, const char *msg);
 
@@ -133,20 +136,35 @@ MeloSoAArray *melo_vm_alloc_soa_array(MeloVM *vm, int32_t struct_id, int32_t fie
     soa->length = capacity;
     soa->capacity = capacity;
 
-    size_t column_need = sizeof(float) * (size_t)capacity;
-    size_t column_aligned = (column_need + 15) & ~((size_t)15);
-
     for (int32_t f = 0; f < field_count; f++) {
+        int comp = 1;
+        if (struct_id >= 0 && struct_id < vm->struct_count) {
+            int t = vm->structs[struct_id].field_types[f];
+            if (t == 3) comp = 2;
+            else if (t == 4) comp = 3;
+            else if (t == 5) comp = 4;
+        }
+        size_t column_need = sizeof(float) * (size_t)(capacity * comp);
+        size_t column_aligned = (column_need + 15) & ~((size_t)15);
         if (vm->object_heap_offset + column_aligned > MELO_OBJECT_HEAP_SIZE) {
             return NULL;
         }
         float *col = (float *)(vm->object_heap + vm->object_heap_offset);
         vm->object_heap_offset += column_aligned;
-        for (int32_t i = 0; i < capacity; i++) col[i] = 0.0f;
+        for (int32_t i = 0; i < capacity * comp; i++) col[i] = 0.0f;
         soa->field_data[f] = col;
     }
 
     return soa;
+}
+
+uint8_t *melo_vm_scratch_base(MeloVM *vm) {
+#if defined(MELO_PS2_TARGET) || defined(__mips__)
+    (void)vm;
+    return (uint8_t *)0x70000000;
+#else
+    return vm->scratch_mem;
+#endif
 }
 
 MeloObject *melo_vm_alloc_object_scratch(MeloVM *vm, int32_t struct_id, int32_t field_count) {
@@ -157,7 +175,8 @@ MeloObject *melo_vm_alloc_object_scratch(MeloVM *vm, int32_t struct_id, int32_t 
         return NULL;
     }
 
-    MeloObject *obj = (MeloObject *)(vm->scratch_mem + vm->scratch_offset);
+    uint8_t *base = melo_vm_scratch_base(vm);
+    MeloObject *obj = (MeloObject *)(base + vm->scratch_offset);
     vm->scratch_offset += aligned;
     if (vm->scratch_offset > vm->scratch_high_water) {
         vm->scratch_high_water = vm->scratch_offset;
@@ -181,7 +200,8 @@ MeloArrayObj *melo_vm_alloc_array_scratch(MeloVM *vm, int32_t capacity) {
         return NULL;
     }
 
-    MeloArrayObj *arr = (MeloArrayObj *)(vm->scratch_mem + vm->scratch_offset);
+    uint8_t *base = melo_vm_scratch_base(vm);
+    MeloArrayObj *arr = (MeloArrayObj *)(base + vm->scratch_offset);
     vm->scratch_offset += aligned;
     if (vm->scratch_offset > vm->scratch_high_water) {
         vm->scratch_high_water = vm->scratch_offset;
@@ -198,6 +218,50 @@ MeloArrayObj *melo_vm_alloc_array_scratch(MeloVM *vm, int32_t capacity) {
 
 void melo_vm_scratch_reset(MeloVM *vm) {
     vm->scratch_offset = 0;
+}
+
+int melo_vm_scratch_dma_in(MeloVM *vm, MeloArrayObj *dest_scratch, const MeloArrayObj *src_ram) {
+    (void)vm;
+    if (!dest_scratch || !src_ram) return -1;
+    int32_t count = dest_scratch->length < src_ram->length ? dest_scratch->length : src_ram->length;
+#if defined(MELO_PS2_TARGET) || defined(__mips__)
+    SyncDCache((void *)src_ram->items, (void *)((uintptr_t)src_ram->items + count * sizeof(MeloValue)));
+#endif
+    size_t u64_count = ((size_t)count * sizeof(MeloValue)) / sizeof(uint64_t);
+    const uint64_t *s = (const uint64_t *)src_ram->items;
+    uint64_t *d = (uint64_t *)dest_scratch->items;
+    for (size_t i = 0; i < u64_count; i += 4) {
+#if defined(MELO_PS2_TARGET) || defined(__mips__)
+        __builtin_prefetch(&s[i + 8], 0, 0);
+#endif
+        d[i] = s[i];
+        if (i + 1 < u64_count) d[i + 1] = s[i + 1];
+        if (i + 2 < u64_count) d[i + 2] = s[i + 2];
+        if (i + 3 < u64_count) d[i + 3] = s[i + 3];
+    }
+    return count;
+}
+
+int melo_vm_scratch_dma_out(MeloVM *vm, MeloArrayObj *dest_ram, const MeloArrayObj *src_scratch) {
+    (void)vm;
+    if (!dest_ram || !src_scratch) return -1;
+    int32_t count = dest_ram->length < src_scratch->length ? dest_ram->length : src_scratch->length;
+    size_t u64_count = ((size_t)count * sizeof(MeloValue)) / sizeof(uint64_t);
+    const uint64_t *s = (const uint64_t *)src_scratch->items;
+    uint64_t *d = (uint64_t *)dest_ram->items;
+    for (size_t i = 0; i < u64_count; i += 4) {
+#if defined(MELO_PS2_TARGET) || defined(__mips__)
+        __builtin_prefetch(&s[i + 8], 0, 0);
+#endif
+        d[i] = s[i];
+        if (i + 1 < u64_count) d[i + 1] = s[i + 1];
+        if (i + 2 < u64_count) d[i + 2] = s[i + 2];
+        if (i + 3 < u64_count) d[i + 3] = s[i + 3];
+    }
+#if defined(MELO_PS2_TARGET) || defined(__mips__)
+    SyncDCache((void *)dest_ram->items, (void *)((uintptr_t)dest_ram->items + count * sizeof(MeloValue)));
+#endif
+    return count;
 }
 
 static uint32_t vram_align_up(uint32_t v) {
@@ -253,6 +317,35 @@ MeloVramTex *melo_vm_vram_alloc(MeloVM *vm, uint32_t width, uint32_t height, uin
     tex->byte_size = aligned_size;
     tex->vram_offset = offset;
     tex->status = MELO_VRAM_EVICTED;
+    tex->bpp = bytes_per_pixel * 8;
+    return tex;
+}
+
+MeloVramTex *melo_vm_vram_alloc_format(MeloVM *vm, uint32_t width, uint32_t height, uint32_t bpp) {
+    if (vm->vram_tex_used >= MELO_VRAM_MAX_TEX) return NULL;
+    if (width == 0 || height == 0) return NULL;
+    uint32_t raw_size = 0;
+    if (bpp == 4) {
+        raw_size = ((width * height) / 2) + 64;
+    } else if (bpp == 8) {
+        raw_size = (width * height) + 1024;
+    } else if (bpp == 16) {
+        raw_size = width * height * 2;
+    } else if (bpp == 32) {
+        raw_size = width * height * 4;
+    } else {
+        return NULL;
+    }
+    uint32_t aligned_size = vram_align_up(raw_size);
+    uint32_t offset;
+    if (!vram_free_list_take(vm, aligned_size, &offset)) return NULL;
+    MeloVramTex *tex = &vm->vram_tex_pool[vm->vram_tex_used++];
+    tex->width = width;
+    tex->height = height;
+    tex->byte_size = aligned_size;
+    tex->vram_offset = offset;
+    tex->status = MELO_VRAM_EVICTED;
+    tex->bpp = bpp;
     return tex;
 }
 
@@ -337,6 +430,7 @@ int melo_coro_create(MeloVM *vm, int func_id) {
     coro->frame_top = 0;
     coro->frames[0].base = 0;
     coro->pc = vm->funcs[func_id].entry;
+    coro->yield_reg = -1;
     return id;
 }
 
@@ -369,8 +463,10 @@ int melo_coro_resume(MeloVM *vm, int coro_id, MeloValue resume_arg, MeloValue *o
         coro->reg_stack[0] = resume_arg;
     } else {
         coro->resume_value = resume_arg;
-        int frame_base = coro->frames[coro->frame_top].base;
-        coro->reg_stack[frame_base + coro->yield_reg] = resume_arg;
+        if (coro->yield_reg >= 0) {
+            int base = coro->frames[coro->frame_top].base;
+            coro->reg_stack[base + coro->yield_reg] = resume_arg;
+        }
     }
 
     coro->status = MELO_CORO_RUNNING;
@@ -409,18 +505,60 @@ void melo_vm_init(MeloVM *vm, MeloInstr *code, size_t code_len) {
 }
 
 static inline MeloVec4 vec4_add(MeloVec4 a, MeloVec4 b) {
+#if defined(__mips__) || defined(MELO_PS2_TARGET)
+    MeloVec4 r;
+    __asm__ __volatile__(
+        "lqc2 $vf1, 0(%1)\n"
+        "lqc2 $vf2, 0(%2)\n"
+        "vadd.xyzw $vf3, $vf1, $vf2\n"
+        "sqc2 $vf3, 0(%0)\n"
+        :
+        : "r"(&r), "r"(&a), "r"(&b)
+        : "memory"
+    );
+    return r;
+#else
     MeloVec4 r = { a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w };
     return r;
+#endif
 }
 
 static inline MeloVec4 vec4_sub(MeloVec4 a, MeloVec4 b) {
+#if defined(__mips__) || defined(MELO_PS2_TARGET)
+    MeloVec4 r;
+    __asm__ __volatile__(
+        "lqc2 $vf1, 0(%1)\n"
+        "lqc2 $vf2, 0(%2)\n"
+        "vsub.xyzw $vf3, $vf1, $vf2\n"
+        "sqc2 $vf3, 0(%0)\n"
+        :
+        : "r"(&r), "r"(&a), "r"(&b)
+        : "memory"
+    );
+    return r;
+#else
     MeloVec4 r = { a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w };
     return r;
+#endif
 }
 
 static inline MeloVec4 vec4_mul(MeloVec4 a, MeloVec4 b) {
+#if defined(__mips__) || defined(MELO_PS2_TARGET)
+    MeloVec4 r;
+    __asm__ __volatile__(
+        "lqc2 $vf1, 0(%1)\n"
+        "lqc2 $vf2, 0(%2)\n"
+        "vmul.xyzw $vf3, $vf1, $vf2\n"
+        "sqc2 $vf3, 0(%0)\n"
+        :
+        : "r"(&r), "r"(&a), "r"(&b)
+        : "memory"
+    );
+    return r;
+#else
     MeloVec4 r = { a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w };
     return r;
+#endif
 }
 
 static inline float vec4_dot(MeloVec4 a, MeloVec4 b) {
@@ -602,11 +740,13 @@ int melo_vm_run_coro(MeloVM *vm, int coro_id) {
         [OP_SOA_GETFIELD] = &&L_SOA_GETFIELD,
         [OP_SOA_SETFIELD] = &&L_SOA_SETFIELD,
         [OP_SOA_LEN] = &&L_SOA_LEN,
+        [OP_CORO_CREATE] = &&L_CORO_CREATE,
+        [OP_CORO_RESUME] = &&L_CORO_RESUME,
+        [OP_CORO_STATUS] = &&L_CORO_STATUS,
         [OP_ARENA_ENTER] = &&L_ARENA_ENTER,
         [OP_ARENA_EXIT] = &&L_ARENA_EXIT,
-        [OP_COROCREATE] = &&L_COROCREATE,
-        [OP_RESUME] = &&L_RESUME,
-        [OP_CORO_STATUS] = &&L_CORO_STATUS,
+        [OP_SCRATCH_DMA_IN] = &&L_SCRATCH_DMA_IN,
+        [OP_SCRATCH_DMA_OUT] = &&L_SCRATCH_DMA_OUT,
         [OP_PRINT] = &&L_PRINT,
         [OP_HALT] = &&L_HALT,
     };
@@ -776,6 +916,26 @@ L_NOT:
 L_VADD:
     {
         int a = INSTR_A(instr), b = INSTR_B(instr), c = INSTR_C(instr);
+        if (__builtin_expect(R[b].type == MELO_VEC4 && R[c].type == MELO_VEC4, 1)) {
+            R[a].type = MELO_VEC4;
+#if defined(__mips__) || defined(MELO_PS2_TARGET)
+            __asm__ __volatile__(
+                "lqc2 $vf1, 0(%1)\n"
+                "lqc2 $vf2, 0(%2)\n"
+                "vadd.xyzw $vf3, $vf1, $vf2\n"
+                "sqc2 $vf3, 0(%0)\n"
+                :
+                : "r"(&R[a].as.v4), "r"(&R[b].as.v4), "r"(&R[c].as.v4)
+                : "memory"
+            );
+#else
+            R[a].as.v4.x = R[b].as.v4.x + R[c].as.v4.x;
+            R[a].as.v4.y = R[b].as.v4.y + R[c].as.v4.y;
+            R[a].as.v4.z = R[b].as.v4.z + R[c].as.v4.z;
+            R[a].as.v4.w = R[b].as.v4.w + R[c].as.v4.w;
+#endif
+            DISPATCH();
+        }
         int rank = vec_rank(R[b].type) > vec_rank(R[c].type) ? vec_rank(R[b].type) : vec_rank(R[c].type);
         if (rank == 0) rank = 4;
         MeloVec4 sum = vec4_add(vec_widen(R[b]), vec_widen(R[c]));
@@ -786,6 +946,26 @@ L_VADD:
 L_VSUB:
     {
         int a = INSTR_A(instr), b = INSTR_B(instr), c = INSTR_C(instr);
+        if (__builtin_expect(R[b].type == MELO_VEC4 && R[c].type == MELO_VEC4, 1)) {
+            R[a].type = MELO_VEC4;
+#if defined(__mips__) || defined(MELO_PS2_TARGET)
+            __asm__ __volatile__(
+                "lqc2 $vf1, 0(%1)\n"
+                "lqc2 $vf2, 0(%2)\n"
+                "vsub.xyzw $vf3, $vf1, $vf2\n"
+                "sqc2 $vf3, 0(%0)\n"
+                :
+                : "r"(&R[a].as.v4), "r"(&R[b].as.v4), "r"(&R[c].as.v4)
+                : "memory"
+            );
+#else
+            R[a].as.v4.x = R[b].as.v4.x - R[c].as.v4.x;
+            R[a].as.v4.y = R[b].as.v4.y - R[c].as.v4.y;
+            R[a].as.v4.z = R[b].as.v4.z - R[c].as.v4.z;
+            R[a].as.v4.w = R[b].as.v4.w - R[c].as.v4.w;
+#endif
+            DISPATCH();
+        }
         int rank = vec_rank(R[b].type) > vec_rank(R[c].type) ? vec_rank(R[b].type) : vec_rank(R[c].type);
         if (rank == 0) rank = 4;
         MeloVec4 diff = vec4_sub(vec_widen(R[b]), vec_widen(R[c]));
@@ -796,6 +976,26 @@ L_VSUB:
 L_VMUL:
     {
         int a = INSTR_A(instr), b = INSTR_B(instr), c = INSTR_C(instr);
+        if (__builtin_expect(R[b].type == MELO_VEC4 && R[c].type == MELO_VEC4, 1)) {
+            R[a].type = MELO_VEC4;
+#if defined(__mips__) || defined(MELO_PS2_TARGET)
+            __asm__ __volatile__(
+                "lqc2 $vf1, 0(%1)\n"
+                "lqc2 $vf2, 0(%2)\n"
+                "vmul.xyzw $vf3, $vf1, $vf2\n"
+                "sqc2 $vf3, 0(%0)\n"
+                :
+                : "r"(&R[a].as.v4), "r"(&R[b].as.v4), "r"(&R[c].as.v4)
+                : "memory"
+            );
+#else
+            R[a].as.v4.x = R[b].as.v4.x * R[c].as.v4.x;
+            R[a].as.v4.y = R[b].as.v4.y * R[c].as.v4.y;
+            R[a].as.v4.z = R[b].as.v4.z * R[c].as.v4.z;
+            R[a].as.v4.w = R[b].as.v4.w * R[c].as.v4.w;
+#endif
+            DISPATCH();
+        }
         int rank = vec_rank(R[b].type) > vec_rank(R[c].type) ? vec_rank(R[b].type) : vec_rank(R[c].type);
         if (rank == 0) rank = 4;
         MeloVec4 prod = vec4_mul(vec_widen(R[b]), vec_widen(R[c]));
@@ -806,6 +1006,18 @@ L_VMUL:
 L_VDOT:
     {
         int a = INSTR_A(instr), b = INSTR_B(instr), c = INSTR_C(instr);
+        if (__builtin_expect(R[b].type == MELO_VEC4 && R[c].type == MELO_VEC4, 1)) {
+            R[a].type = MELO_FLOAT;
+            R[a].as.f32 = R[b].as.v4.x * R[c].as.v4.x + R[b].as.v4.y * R[c].as.v4.y +
+                          R[b].as.v4.z * R[c].as.v4.z + R[b].as.v4.w * R[c].as.v4.w;
+            DISPATCH();
+        }
+        if (R[b].type == MELO_VEC3 && R[c].type == MELO_VEC3) {
+            R[a].type = MELO_FLOAT;
+            R[a].as.f32 = R[b].as.v3.x * R[c].as.v3.x + R[b].as.v3.y * R[c].as.v3.y +
+                          R[b].as.v3.z * R[c].as.v3.z;
+            DISPATCH();
+        }
         R[a] = melo_float(vec4_dot(vec_widen(R[b]), vec_widen(R[c])));
     }
     DISPATCH();
@@ -813,6 +1025,13 @@ L_VDOT:
 L_VCROSS:
     {
         int a = INSTR_A(instr), b = INSTR_B(instr), c = INSTR_C(instr);
+        if (R[b].type == MELO_VEC3 && R[c].type == MELO_VEC3) {
+            R[a].type = MELO_VEC3;
+            R[a].as.v3.x = R[b].as.v3.y * R[c].as.v3.z - R[b].as.v3.z * R[c].as.v3.y;
+            R[a].as.v3.y = R[b].as.v3.z * R[c].as.v3.x - R[b].as.v3.x * R[c].as.v3.z;
+            R[a].as.v3.z = R[b].as.v3.x * R[c].as.v3.y - R[b].as.v3.y * R[c].as.v3.x;
+            DISPATCH();
+        }
         MeloValue v; v.type = MELO_VEC3;
         MeloVec4 cr = vec3_cross(vec_widen(R[b]), vec_widen(R[c]));
         v.as.v3.x = cr.x; v.as.v3.y = cr.y; v.as.v3.z = cr.z;
@@ -834,6 +1053,21 @@ L_VSCALE:
     {
         int a = INSTR_A(instr), b = INSTR_B(instr), c = INSTR_C(instr);
         float s = R[c].type == MELO_FLOAT ? R[c].as.f32 : (float)R[c].as.i32;
+        if (__builtin_expect(R[b].type == MELO_VEC4, 1)) {
+            R[a].type = MELO_VEC4;
+            R[a].as.v4.x = R[b].as.v4.x * s;
+            R[a].as.v4.y = R[b].as.v4.y * s;
+            R[a].as.v4.z = R[b].as.v4.z * s;
+            R[a].as.v4.w = R[b].as.v4.w * s;
+            DISPATCH();
+        }
+        if (R[b].type == MELO_VEC3) {
+            R[a].type = MELO_VEC3;
+            R[a].as.v3.x = R[b].as.v3.x * s;
+            R[a].as.v3.y = R[b].as.v3.y * s;
+            R[a].as.v3.z = R[b].as.v3.z * s;
+            DISPATCH();
+        }
         int rank = vec_rank(R[b].type);
         if (rank == 0) rank = 4;
         MeloVec4 scaled = vec4_scale(vec_widen(R[b]), s);
@@ -1007,13 +1241,14 @@ L_CALL:
 L_YIELD:
     {
         int a = INSTR_A(instr);
+        int b = INSTR_B(instr);
         if (!coro) {
             melo_vm_error(vm, "yield used outside of a coroutine");
             goto L_HALT;
         }
-        coro->yield_value = R[a];
-        coro->pc = pc;
+        coro->yield_value = (b == 0 && a != 0 && (instr & 0x00FF0000) == 0) ? R[a] : R[b];
         coro->yield_reg = a;
+        coro->pc = pc;
         coro->status = MELO_CORO_SUSPENDED;
         vm->active_coroutine = prev_active_coroutine;
         return 2;
@@ -1364,7 +1599,23 @@ L_SOA_GETFIELD:
             melo_vm_error(vm, "unknown SoA field index");
             goto L_HALT;
         }
-        R[a] = melo_float(soa->field_data[field_idx][index]);
+        int field_type = 2;
+        if (soa->struct_id >= 0 && soa->struct_id < vm->struct_count) {
+            field_type = vm->structs[soa->struct_id].field_types[field_idx];
+        }
+        float *data = soa->field_data[field_idx];
+        int32_t cap = soa->capacity;
+        if (field_type == 1) {
+            R[a] = melo_int((int32_t)data[index]);
+        } else if (field_type == 3) {
+            R[a] = melo_vec2(data[index], data[cap + index]);
+        } else if (field_type == 4) {
+            R[a] = melo_vec3(data[index], data[cap + index], data[2 * cap + index]);
+        } else if (field_type == 5) {
+            R[a] = melo_vec4(data[index], data[cap + index], data[2 * cap + index], data[3 * cap + index]);
+        } else {
+            R[a] = melo_float(data[index]);
+        }
     }
     DISPATCH();
 
@@ -1387,8 +1638,30 @@ L_SOA_SETFIELD:
             melo_vm_error(vm, "unknown SoA field index");
             goto L_HALT;
         }
-        float val = R[c].type == MELO_FLOAT ? R[c].as.f32 : (float)R[c].as.i32;
-        soa->field_data[field_idx][index] = val;
+        int field_type = 2;
+        if (soa->struct_id >= 0 && soa->struct_id < vm->struct_count) {
+            field_type = vm->structs[soa->struct_id].field_types[field_idx];
+        }
+        float *data = soa->field_data[field_idx];
+        int32_t cap = soa->capacity;
+        if (field_type == 3 && R[c].type == MELO_VEC2) {
+            data[index] = R[c].as.v2.x;
+            data[cap + index] = R[c].as.v2.y;
+        } else if (field_type == 4 && R[c].type == MELO_VEC3) {
+            data[index] = R[c].as.v3.x;
+            data[cap + index] = R[c].as.v3.y;
+            data[2 * cap + index] = R[c].as.v3.z;
+        } else if (field_type == 5 && R[c].type == MELO_VEC4) {
+            data[index] = R[c].as.v4.x;
+            data[cap + index] = R[c].as.v4.y;
+            data[2 * cap + index] = R[c].as.v4.z;
+            data[3 * cap + index] = R[c].as.v4.w;
+        } else if (field_type == 1 && R[c].type == MELO_INT32) {
+            data[index] = (float)R[c].as.i32;
+        } else {
+            float val = R[c].type == MELO_FLOAT ? R[c].as.f32 : (float)R[c].as.i32;
+            data[index] = val;
+        }
     }
     DISPATCH();
 
@@ -1400,6 +1673,74 @@ L_SOA_LEN:
             goto L_HALT;
         }
         R[a] = melo_int(R[b].as.soa->length);
+    }
+    DISPATCH();
+
+L_CORO_CREATE:
+    {
+        int a = INSTR_A(instr), b = INSTR_B(instr), c = INSTR_C(instr);
+        int func_id = (c == 1) ? R[b].as.i32 : b;
+        int id = melo_coro_create(vm, func_id);
+        if (id < 0) {
+            melo_vm_error(vm, "coro_create failed: invalid function id or coroutine limit reached");
+            goto L_HALT;
+        }
+        R[a] = melo_int(id);
+    }
+    DISPATCH();
+
+L_CORO_RESUME:
+    {
+        int a = INSTR_A(instr), b = INSTR_B(instr), c = INSTR_C(instr);
+        if (R[b].type != MELO_INT32) {
+            melo_vm_error(vm, "coro_resume requires coroutine id");
+            goto L_HALT;
+        }
+        int coro_id = R[b].as.i32;
+        MeloValue resume_val = (c != 255) ? R[c] : melo_nil();
+        MeloValue yield_val = melo_nil();
+        int rc = melo_coro_resume(vm, coro_id, resume_val, &yield_val);
+        if (rc != 0 || vm->error) {
+            goto L_HALT;
+        }
+        R[a] = yield_val;
+    }
+    DISPATCH();
+
+L_CORO_STATUS:
+    {
+        int a = INSTR_A(instr), b = INSTR_B(instr);
+        if (R[b].type != MELO_INT32) {
+            melo_vm_error(vm, "coro_status requires coroutine id");
+            goto L_HALT;
+        }
+        int coro_id = R[b].as.i32;
+        MeloCoroStatus st = melo_coro_status(vm, coro_id);
+        R[a] = melo_int((int32_t)st);
+    }
+    DISPATCH();
+
+L_SCRATCH_DMA_IN:
+    {
+        int a = INSTR_A(instr), b = INSTR_B(instr), c = INSTR_C(instr);
+        if (R[b].type != MELO_ARRAY || R[c].type != MELO_ARRAY || !R[b].as.arr || !R[c].as.arr) {
+            melo_vm_error(vm, "scratch_dma_in requires array arguments");
+            goto L_HALT;
+        }
+        int count = melo_vm_scratch_dma_in(vm, R[b].as.arr, R[c].as.arr);
+        R[a] = melo_int(count);
+    }
+    DISPATCH();
+
+L_SCRATCH_DMA_OUT:
+    {
+        int a = INSTR_A(instr), b = INSTR_B(instr), c = INSTR_C(instr);
+        if (R[b].type != MELO_ARRAY || R[c].type != MELO_ARRAY || !R[b].as.arr || !R[c].as.arr) {
+            melo_vm_error(vm, "scratch_dma_out requires array arguments");
+            goto L_HALT;
+        }
+        int count = melo_vm_scratch_dma_out(vm, R[b].as.arr, R[c].as.arr);
+        R[a] = melo_int(count);
     }
     DISPATCH();
 
@@ -1461,54 +1802,6 @@ L_ARENA_ENTER:
 L_ARENA_EXIT:
     melo_vm_arena_exit(vm);
     if (vm->halted) return vm->error;
-    DISPATCH();
-
-L_COROCREATE:
-    {
-        int a = INSTR_A(instr);
-        int func_id = INSTR_B(instr);
-        int new_coro = melo_coro_create(vm, func_id);
-        if (new_coro < 0) {
-            melo_vm_error(vm, "failed to create coroutine");
-            goto L_HALT;
-        }
-        R[a] = melo_coro(new_coro);
-    }
-    DISPATCH();
-
-L_RESUME:
-    {
-        int a = INSTR_A(instr);
-        int coro_reg = INSTR_B(instr);
-        int val_reg = INSTR_C(instr);
-
-        if (R[coro_reg].type != MELO_CORO) {
-            melo_vm_error(vm, "resume() requires a coroutine value");
-            goto L_HALT;
-        }
-        int target_coro_id = R[coro_reg].as.i32;
-        MeloValue resume_arg = R[val_reg];
-
-        vm->active_coroutine = prev_active_coroutine;
-        int rc = melo_coro_resume(vm, target_coro_id, resume_arg, &R[a]);
-        vm->active_coroutine = coro_id >= 0 ? coro_id : -1;
-        if (rc != 0) {
-            goto L_HALT;
-        }
-    }
-    DISPATCH();
-
-L_CORO_STATUS:
-    {
-        int a = INSTR_A(instr);
-        int coro_reg = INSTR_B(instr);
-        if (R[coro_reg].type != MELO_CORO) {
-            melo_vm_error(vm, "coro_status() requires a coroutine value");
-            goto L_HALT;
-        }
-        MeloCoroStatus st = melo_coro_status(vm, R[coro_reg].as.i32);
-        R[a] = melo_int((int32_t)st);
-    }
     DISPATCH();
 
 L_HALT:

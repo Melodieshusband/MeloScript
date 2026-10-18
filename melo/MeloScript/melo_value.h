@@ -16,8 +16,7 @@ typedef enum {
     MELO_OBJECT,
     MELO_ARRAY,
     MELO_SOA_ARRAY,
-    MELO_VRAM_TEX,
-    MELO_CORO
+    MELO_VRAM_TEX
 } MeloType;
 
 typedef enum {
@@ -31,6 +30,7 @@ typedef struct MeloVramTex {
     uint32_t byte_size;
     uint32_t vram_offset;
     MeloVramStatus status;
+    uint32_t bpp;
 } MeloVramTex;
 
 typedef struct MELO_ALIGN16 {
@@ -111,6 +111,23 @@ static inline MeloValue melo_float(float x) {
     return v;
 }
 
+static inline MeloValue melo_vec2(float x, float y) {
+    MeloValue v;
+    v.type = MELO_VEC2;
+    v.as.v2.x = x;
+    v.as.v2.y = y;
+    return v;
+}
+
+static inline MeloValue melo_vec3(float x, float y, float z) {
+    MeloValue v;
+    v.type = MELO_VEC3;
+    v.as.v3.x = x;
+    v.as.v3.y = y;
+    v.as.v3.z = z;
+    return v;
+}
+
 static inline MeloValue melo_vec4(float x, float y, float z, float w) {
     MeloValue v;
     v.type = MELO_VEC4;
@@ -153,13 +170,6 @@ static inline MeloValue melo_vram_tex(struct MeloVramTex *t) {
     MeloValue v;
     v.type = MELO_VRAM_TEX;
     v.as.vram = t;
-    return v;
-}
-
-static inline MeloValue melo_coro(int32_t coro_id) {
-    MeloValue v;
-    v.type = MELO_CORO;
-    v.as.i32 = coro_id;
     return v;
 }
 

@@ -1,7 +1,10 @@
-<!-- bytecode magic: 36296abdd36e693e9ceedf -->
-# MeloScript Grammar (v0.1)
-Notation: EBNF-like. [] — optional, {} — zero or more repetitions, | — alternative.
-```
+# MeloScript Grammar and Specification
+
+MeloScript is a statically-typed language designed for PlayStation 2 homebrew game development.
+
+## Grammar
+
+```ebnf
 program        = { top_level_decl } ;
 
 top_level_decl = func_decl
@@ -23,7 +26,7 @@ param          = IDENT ":" type ;
 struct_decl    = { annotation } "struct" IDENT "{" { field_decl } "}" ;
 field_decl     = IDENT ":" type "," ;
 
-vukernel_decl  = "vukernel" IDENT "(" [ param_list ] ")" "->" type block ;
+vukernel_decl  = { annotation } "vukernel" IDENT "(" [ param_list ] ")" "->" type block ;
 
 var_decl       = { annotation } ("var" | "let") IDENT [ ":" type ] "=" expr ;
 
@@ -41,6 +44,7 @@ statement      = var_decl ";"
                 | while_stmt
                 | for_stmt
                 | return_stmt ";"
+                | yield_stmt ";"
                 | arena_block
                 | block
                 ;
@@ -51,6 +55,7 @@ if_stmt        = "if" "(" expr ")" block [ "else" (if_stmt | block) ] ;
 while_stmt     = "while" "(" expr ")" block ;
 for_stmt       = "for" IDENT "in" expr block ;
 return_stmt    = "return" [ expr ] ;
+yield_stmt     = "yield" [ expr ] ;
 arena_block    = "arena" [ IDENT ] block ;
 
 expr           = assignment ;
@@ -77,253 +82,174 @@ primary        = INT_LIT | FLOAT_LIT | STRING_LIT | "true" | "false"
 
 vec_ctor       = ("vec2"|"vec3"|"vec4") "(" arg_list ")" ;
 array_lit      = "array" "<" type [ "," INT_LIT ] ">" "(" [ arg_list ] ")" ;
-
 ```
+
 ## Lexemes
- * IDENT — [a-zA-Z_][a-zA-Z0-9_]*
- * INT_LIT — [0-9]+
- * FLOAT_LIT — [0-9]+ "." [0-9]+
- * STRING_LIT — "..." with escaping for \", \n, \t, \r, \\
- * Comments: // ... to the end of the line
-## Built-in Functions
- * print(x) — prints a value of any type (int32, float, vec2/3/4, string, array) with a newline.
- * vdot(a, b) — vector dot product.
- * vcross(a, b) — vector cross product (vec3).
- * vnorm(a) — vector normalization.
- * len(a) — array length (int32).
+
+- IDENT: `[a-zA-Z_][a-zA-Z0-9_]*`
+- INT_LIT: `[0-9]+`
+- FLOAT_LIT: `[0-9]+.[0-9]+`
+- STRING_LIT: `"..."` with escaping for `\"`, `\n`, `\t`, `\r`, `\\`
+
+## Numeric Types and Float Guarantee
+
+- `int32`: 32-bit signed integer native to the Emotion Engine CPU.
+- `float`: 32-bit single-precision IEEE 754 floating point.
+- `double`: prohibited at compile time. The Emotion Engine R5900 hardware only supports single-precision floating point. Using `double` causes a compile-time error to prevent unintentional software emulation slowdowns.
+
+## Vectors
+
+Vectors are first-class language primitives aligned to 16-byte quadword boundaries:
+
+- `vec2`: 2-component float vector (.x, .y).
+- `vec3`: 3-component float vector (.x, .y, .z).
+- `vec4`: 4-component float vector (.x, .y, .z, .w) matching the 128-bit VU register width.
+
+Component access outside of the declared vector rank produces a compile-time error.
+Arithmetic operations on vectors preserve rank. On PlayStation 2 targets, vector addition, subtraction, and multiplication lower to native COP2 instructions: `lqc2`, `sqc2`, `vadd.xyzw`, `vsub.xyzw`, `vmul.xyzw`.
+
+Built-in vector functions:
+- `vdot(a, b)`: vector dot product.
+- `vcross(a, b)`: vector cross product (`vec3`).
+- `vnorm(a)`: vector normalization.
+
+```melo
+var v = vec3(1.0, 2.0, 3.0);
+v.y = 99.0;
+var len = vnorm(v);
+```
+
 ## Arrays
-Arrays are fixed-size and are stored as a single object in the VM's object heap (using the same allocator as structs), aligned to a 16-byte boundary. The size of the array is defined at compile-time and does not change at runtime—this aligns with a model free of tracing GC: one allocation, with no rebalancing or fragmentation.
-Constructor:
-```melo
-var xs = array<int32, 3>(10, 20, 30);   // explicit size + initialization
-var ys = array<int32, 4>();             // explicit size, all elements = nil/0
-var zs = array<int32>(1, 2, 3, 4, 5);   // size inferred from argument count
 
-```
-If the size is explicitly specified and a non-empty list of initializers is passed, their count must match—otherwise, a compile-time error array initializer count does not match declared array size is generated.
-Indexing reads/writes directly to the array elements:
-```melo
-xs[0] = 99;
-var v = xs[0];
+Arrays are fixed-size and stored as a single contiguous object aligned to 16 bytes:
 
+```melo
+var xs = array<int32, 3>(10, 20, 30);
+var ys = array<int32, 4>();
+var zs = array<int32>(1, 2, 3, 4, 5);
 ```
-An index outside the [0, len) range results in a VM runtime error (array index out of range), rather than undefined behavior: arrays always check boundaries because unchecked memory access on the PS2 (lacking traditional user-level MMU protection) is a guaranteed way to crash the console without a sensible error message.
-for x in xs { ... } compiles into a counted loop (len + indexing), without creating a hidden iterator object and without allocations within the loop body—the element is copied by value into the loop variable register on each iteration.
+
+Boundary checking is enforced at runtime. Iteration uses counted loops without hidden iterator allocations:
+
 ```melo
 var total = 0;
 for x in xs {
     total = total + x;
 }
-
 ```
-Arrays support any element type, including vec2/vec3/vec4 and declared structs:
+
+## In-Script Coroutines
+
+Cooperative multitasking without thread locking or kernel overhead:
+
+- `coro_create(fn)`: creates a coroutine context with its own call stack and register frame.
+- `coro_resume(c, [arg])`: resumes execution up to the next `yield` or `return`.
+- `coro_status(c)`: returns current state (0 = finished, 1 = suspended, 2 = running).
+
 ```melo
-struct Particle { x: int32 }
-var ps = array<Particle, 3>(Particle(1), Particle(2), Particle(3));
-for p in ps {
-    print(p.x);
+func worker() -> int32 {
+    yield 10;
+    yield 20;
+    return 30;
 }
 
-```
-## @scratch — Scratchpad RAM Allocation
-@scratch is an annotation on a variable declaration indicating that the value should be placed in the emulated 16 KB Scratchpad RAM (SPR) instead of the standard VM object heap. On real PS2 hardware, the SPR is mapped to a fixed address 0x70000000 and provides zero-wait-state access, unlike cached main RDRAM—thus, it is a separate, physically smaller, and faster memory region, rather than simply another flag for a standard allocator.
-```melo
-@scratch var model_matrices = array<int32, 4>(1, 2, 3, 4);
-
-```
-Restrictions checked at compile-time:
- * @scratch is only allowed for array initializers (array<...>(...)) and struct constructors. Scalars (int32, float, bool) and vectors (vec2/vec3/vec4) are not allocated on the heap at all (they live by value in VM registers), so using @scratch on them results in a compile-time error @scratch may only be used on array or struct variable declarations, rather than silently being a no-op.
- * The compiler does not evaluate the exact size in advance in the general case (the size of an array with struct/vec4 elements is only known at runtime), so exceeding the 16 KB limit is a **runtime error** for the VM (scratchpad exhausted (16KB SPR limit exceeded)), which stops the VM just as strictly as a standard object heap overflow.
-Under the hood, @scratch modifies the allocation opcode: NEWARRAY → NEWARRAY_SCRATCH, NEWOBJECT → NEWOBJECT_SCRATCH. These operate as separate bump-allocators over an independent 16 KB scratch_mem buffer, completely isolated from the object_heap (standard var/let variables without @scratch never end up in this region, and vice versa). Both allocators align every allocation to a 16-byte boundary—just like the normal object heap.
-Unlike arena { ... }, @scratch does not yet feature an automatic reset when leaving the scope—the reset is executed via an explicit call to melo_vm_scratch_reset() at the frame boundary (e.g., from the host C game loop, prior to the next frame's melo_vm_run()). This is a deliberate distinction from Memory Arenas: real SPR is most often used for a single consistent set of "hot" data for the entire frame (transformation matrices, vertex buffers) rather than for nested temporary scopes, so scope-based nesting and auto-resets are redundant here.
-## VRAM Textures (4 MB eDRAM GS) — Manual Lifecycle Management
-Following the memory model from the specific reference document, PS2LANG_SPEC.md, objects in the Graphics Synthesizer's video memory are **not** subject to automatic garbage collection or arena resets—real-time VRAM defragmentation is impossible on the PS2, so the language requires explicit calls at every stage of a texture's life.
-Integration is implemented as a standard VM native function library (melo_stdlib_vram.c) alongside the @vram annotation on a variable declaration (patterned after @scratch), which automatically emits an upload() call immediately after allocation:
-```melo
 func main() -> int32 {
-    var tex = vram_alloc(256, 256);  // reserves address space in the 4 MB VRAM
-    upload(tex);                     // marks the texture as resident, counts bytes against the budget
-    var is_res = resident(tex);      // 1 if resident
-    evict(tex);                      // removes residency, frees bandwidth budget, address remains pinned
-    vram_free(tex);                  // completely returns the address range to the pool (for scene/level change)
-    return is_res;
+    var c = coro_create(worker);
+    var v1 = coro_resume(c);
+    var v2 = coro_resume(c);
+    var v3 = coro_resume(c);
+    return v1 + v2 + v3;
 }
-
 ```
-Equivalent, but shorter, using @vram:
+
+## Scratchpad RAM (@scratch)
+
+Places data in the 16 KB fast Scratchpad RAM (SPR):
+- On PlayStation 2 hardware targets, addresses map to `0x70000000`.
+- All allocations are quadword-aligned (16 bytes).
+- Exceeding the 16 KB limit triggers an immediate runtime error.
+- `scratch_dma_in(dest_scratch, src_ram)`: transfers elements from main RAM into Scratchpad RAM with hardware cache flush.
+- `scratch_dma_out(dest_ram, src_scratch)`: transfers elements from Scratchpad RAM back to main RAM with cache synchronization.
+
 ```melo
-func main() -> int32 {
-    @vram var tex = vram_alloc(256, 256);
-    var is_res = resident(tex);
-    evict(tex);
-    vram_free(tex);
-    return is_res;
-}
-
+var ram_data = array<int32, 4>(10, 20, 30, 40);
+@scratch var spr = array<int32, 4>();
+scratch_dma_in(spr, ram_data);
+spr[0] = 99;
+scratch_dma_out(ram_data, spr);
 ```
-@vram is only permitted on a variable whose initializer is a literal vram_alloc(...) call; any other initializer (a constant, a call to another function) results in a compile-time error @vram may only be used on a variable initialized with vram_alloc(...). During the codegen phase, an additional OP_NATIVECALL to upload is emitted right after the allocation, using a separate register for the argument and result—the texture variable itself is unaffected. evict()/vram_free() are still called manually, just like before: the annotation only automates the initial VRAM upload phase, not the entire lifecycle.
-Memory model:
- * vram_alloc(width, height) -> vram_tex — reserves a contiguous address range in the 4 MB MELO_VRAM_SIZE pool via a free-list allocator (not a bump-allocator: it supports arbitrary vram_free ordering, unlike Scratchpad/arenas). The format is fixed to RGBA32 (4 bytes/pixel)—the most general case; indexed paletted formats for denser packing (6:1 / 3:1 from the specification) are not yet implemented. The allocation is aligned to 64 bytes (MELO_VRAM_ALIGN). Failing due to lack of space causes a runtime error VRAM exhausted (4MB eDRAM limit exceeded).
- * upload(tex) / evict(tex) — toggles the residency flag (MELO_VRAM_RESIDENT / MELO_VRAM_EVICTED) and updates the vm->vram_bytes_resident counter. The address range remains reserved for the texture in both states—this corresponds to the model where "the VRAM address is pinned for the lifetime of the asset, while data residency at that address can be toggled on/off" (e.g., for streaming high-res textures only when the camera is nearby).
- * vram_free(tex) — completely returns the address range to the free-list (implicitly calling evict first if the texture was resident). Used when changing levels/scenes, when the entire asset set changes.
- * resident(tex) -> int32 — returns 1 or 0 based on whether the texture is currently resident.
-All five functions must be registered in the VM via melo_stdlib_register_vram(vm) before running—without this call, a program using vram_alloc/upload/evict/resident/vram_free will crash during the codegen phase with a call to undefined function error, much like any other unregistered native function. @vram additionally requires that upload be registered under that exact name—otherwise, codegen will fail with @vram requires the vram stdlib to be registered.
-## Vectors: Component Access and vec2/vec3/vec4 Typing
-vec2, vec3, and vec4 are distinct types at VM runtime (they are not aliases for vec4). Components are accessed via .x, .y, .z, .w; accessing beyond the vector's rank (e.g., .w on a vec3) is a compile-time error.
+
+## 64-bit Integer and Fixed-Point Math
+
+Provides deterministic arithmetic and 64-bit operations without slow CPU division or multiplication emulation:
+
+- `i64_add_lo(a_hi, a_lo, b_hi, b_lo)` / `i64_add_hi(...)`: 64-bit integer addition.
+- `i64_sub_lo(...)` / `i64_sub_hi(...)`: 64-bit integer subtraction.
+- `i64_mul_lo(a_lo, b_lo)` / `i64_mul_hi(a_lo, b_lo)`: 32x32 -> 64-bit multiplication.
+- `i64_cmp(a_hi, a_lo, b_hi, b_lo)`: 64-bit integer comparison.
+- `fix_from_float(f)` / `fix_to_float(x)`: converts between float and 16.16 fixed-point format.
+- `fix_mul(a, b)` / `fix_div(a, b)`: deterministic 16.16 fixed-point operations.
+- `clamp(val, min, max)`, `lerp(a, b, t)`, `fmin(a, b)`, `fmax(a, b)`, `fabs_val(a)`: common game math routines.
+
+## Video Memory Management (@vram)
+
+Explicit lifecycle for textures in 4 MB GS eDRAM:
+- `vram_alloc(width, height, [bpp])`: reserves contiguous VRAM space.
+- `vram_alloc_paletted(width, height, bpp)`: allocates 4-bit (16 colors) or 8-bit (256 colors) paletted textures, saving up to 6:1 VRAM bandwidth.
+- `upload(tex)`: marks texture as resident and accounts for bandwidth.
+- `resident(tex)`: queries residency status (1 or 0).
+- `evict(tex)`: frees resident bandwidth while keeping the VRAM address reserved.
+- `vram_free(tex)`: releases the VRAM address back to the free-list pool.
+- `vram_bpp(tex)`: returns texture bits per pixel (4, 8, 16, or 32).
+- `vram_size(tex)`: returns texture byte size.
+
 ```melo
-var v = vec3(1.0, 2.0, 3.0);
-v.y = 99.0;
-var s = v.x + v.y + v.z;
-
+@vram var tex = vram_alloc_paletted(128, 128, 8);
+var is_res = resident(tex);
+evict(tex);
+vram_free(tex);
 ```
-Constructors support both constant and arbitrary expression arguments (vec2(a + 1.0, b)). Arithmetic operations (+, -, component-wise *, vscale, vnorm) preserve the rank of the input vector: vec2 + vec2 yields a vec2, not a vec4—this follows a type system where vec2/vec3/vec4 are first-class primitives with different physical sizes, rather than the same 128-bit register with "unused" components.
-## Native Host Functions (Native Function Registry)
-The host (the C code embedding the VM) can register its own C functions to be called from the script by name—this acts as the foundation for a future standard library (audio, I/O, GS/DMA, etc.) without inflating the codegen for every single function:
-```c
-int my_native(MeloVM *vm, MeloValue *args, int arg_count, MeloValue *out_result) { ... }
 
-melo_codegen_compile_with_natives(prog, &mod, names, name_count);
-melo_vm_register_native(&vm, "my_native", my_native);
-
-```
-The order of names passed to melo_codegen_compile_with_natives must match the registration order in melo_vm_register_native—the native function index is locked in during bytecode compilation (OP_NATIVECALL) and cannot be redefined at runtime.
-## Coroutines (yield) — Cooperative Multitasking
-Instead of preemptive threads (which are unavailable on the PS2 due to the absence of hardware LL/SC instructions), the language provides cooperative coroutines: context switching occurs only at explicit yield points, deterministically, and without bus locking.
-```melo
-func counter() -> int32 {
-    yield 1;
-    yield 2;
-    return 3;
-}
-
-```
-Each coroutine maintains an independent set of registers and a call stack, completely isolated from the main thread and other coroutines (verified by running instances of the same function in parallel). Management is handled via the host C API:
-```c
-int coro = melo_coro_create(&vm, func_id);
-MeloValue yielded;
-melo_coro_resume(&vm, coro, melo_nil(), &yielded);
-melo_coro_status(&vm, coro);
-
-```
-Calling yield outside a coroutine (i.e., in the main VM thread or a nested standard function call without creating a coroutine) results in a runtime error, not a silent no-op: this safeguards against accidental attempts to suspend execution where there is no context to resume.
-Coroutine management is also available directly from the language itself, as expressions, without going through the host C API:
-```melo
-func counter() -> int32 {
-    yield 1;
-    yield 2;
-    return 3;
-}
-func main() -> int32 {
-    var c = coro_create(counter);
-    var a = resume(c, 0);
-    var b = resume(c, 0);
-    var d = resume(c, 0);
-    return a * 100 + b * 10 + d;
-}
-
-```
-coro_create(funcname) takes a bare function name (not a call) and returns a coroutine handle value; resume(coro, val) resumes it, passing val into the currently suspended yield point and returning whatever value the coroutine yields or returns next; coro_status(coro) returns the same status codes as the host API (MELO_CORO_SUSPENDED, MELO_CORO_RUNNING, MELO_CORO_FINISHED, MELO_CORO_DEAD) as an int32. All three lower to dedicated opcodes (OP_COROCREATE, OP_RESUME, OP_CORO_STATUS) rather than going through the native function registry, and resume() may be called on a coroutine from within another coroutine or from the main thread interchangeably. Calling resume() on a value that isn't a coroutine handle is a runtime error, and coro_create() with an argument that isn't a known function name is a compile-time error.
-yield is also an expression, not just a statement: `var got = yield 0;` suspends the coroutine, and the value passed into the next resume(coro, val) call becomes the value of that yield expression once execution continues, so it can be assigned, used in arithmetic, or passed to another call. The bare statement form (`yield 1;` with no assignment) still works unchanged for cases where the resumed value isn't needed.
-```melo
-func echo() -> int32 {
-    var got = yield 0;
-    return got + 1;
-}
-func main() -> int32 {
-    var c = coro_create(echo);
-    var first = resume(c, 0);
-    var second = resume(c, 41);
-    return second;
-}
-
-```
 ## Struct-of-Arrays (#[soa])
-The #[soa] annotation on a struct forces the compiler to physically store arrays of this struct as parallel columns (one float array per field), rather than as an array of distinct objects—this ensures spatial locality for the L1 cache and compatibility with 128-bit SIMD loads, as detailed in the hardware analysis.
+
+Stores arrays of structs in parallel column buffers to optimize L1 data cache and enable 128-bit SIMD loads:
+
 ```melo
 #[soa]
 struct Particle {
-    x: float,
-    y: float,
+    pos: vec3,
+    vel: vec3,
+    color: int32,
 }
 
 func main() -> float {
-    var particles = array<Particle, 3>(
-        Particle(1.0, 2.0),
-        Particle(3.0, 4.0),
-        Particle(5.0, 6.0)
+    var particles = array<Particle, 2>(
+        Particle(vec3(1.0, 2.0, 3.0), vec3(0.1, 0.2, 0.3), 255),
+        Particle(vec3(4.0, 5.0, 6.0), vec3(0.4, 0.5, 0.6), 128)
     );
-    particles[0].x = 99.0;
-    return particles[1].x + particles[1].y;
+    particles[0].pos.x = 99.0;
+    return particles[0].pos.x + particles[1].pos.y;
 }
-
 ```
-Current limitations (checked at compile-time, not silently ignored):
- * Fields of a #[soa] struct must be float or int32. Vector (vec2/vec3/vec4) and nested struct fields are not yet supported—this is the most frequent extension that should be implemented next (it will require multiple columns for a single compound field).
- * Elements of a #[soa] struct array must be literal struct constructor calls (Particle(1.0, 2.0)), not arbitrary expressions—the column layout is resolved element-by-element during compile time.
- * @scratch is not yet supported for #[soa] arrays (due to different memory ownership models—merging them will be a separate task).
- * Standard (non-#[soa] annotated) struct arrays remain unaffected and continue to function as before—this has been confirmed via tests.
-## vukernel — Current Implementation Status
 
-TODO: Rewrite this section... if Melodie ever lets me go.
-A vukernel compiles and **executes on the VM as a standard function** (software emulation)—this is not yet authentic VU1 microcode. The compiler additionally checks two limits specific to actual VU1 hardware, rejecting compilation with a clear error rather than allowing a runtime crash:
- * **Instruction memory**: the compiled body must not exceed 16 KB (MELO_VU1_INSTR_LIMIT).
- * **Data memory**: the number of VM registers utilized in the function, multiplied by 16 bytes (the size of a single VU register), must not exceed 16 KB (MELO_VU1_DATA_LIMIT).
+## Vector Unit Microprograms (vukernel)
+
+`vukernel` defines microprograms for VU0 or VU1:
+- `@vu0 vukernel`: enforced compile-time limit of 4 KB instruction memory and 4 KB data memory.
+- `vukernel` (or `@vu1 vukernel`): enforced compile-time limit of 16 KB instruction memory and 16 KB data memory.
+- Compiles to 64-bit VLIW microcode instructions dual-issuing upper and lower operations with automatic E-flag and DMA packet generation.
+
 ```melo
-vukernel add_offset(v: vec4) -> vec4 {
+@vu0
+vukernel vu0_add(v: vec4) -> vec4 {
     return v + vec4(1.0, 1.0, 1.0, 1.0);
 }
 ```
-Each compiled function is tagged with an is_vukernel flag in MeloFuncInfo—this will allow hooking up a real VU1 assembly backend for these functions in the future without disrupting the rest of the codegen.
 
-## Loops (`while`, `for`)
+## Performance Annotations
 
-MeloScript supports standard `while` condition loops and `for..in` iteration over arrays.
-
-```melo
-// Nooo, Melodie, let me go!
-var running = true;
-while (running) {
-    // trapped in an infinite loop
-}
-```
-
-## Keywords
-func var let struct vukernel arena if else while for in return true false
-## Example of a Full Program
-```melo
-func main() {
-    print("Hello World");
-}
-
-```
-```melo
-struct Particle {
-    position: vec3,
-    velocity: vec3,
-}
-
-@hot
-func update(p: Particle, dt: float) -> vec3 {
-    var v = p.velocity;
-    return p.position + v * dt;
-}
-
-func main() {
-    var a = vec4(1.0, 2.0, 3.0, 0.0);
-    var b = vec4(4.0, 5.0, 6.0, 0.0);
-    var d = vdot(a, b);
-    return;
-}
-
-```
-
-## Size and Integrity Functions (melo_stdlib_size)
-
-An optional native module in `libs/melo_stdlib_size.c`. It must be registered with `melo_stdlib_register_size(vm)` and its names passed to `melo_codegen_compile_with_natives` via `melo_stdlib_size_native_names`.
-
- * bytes_of(value) -> int32 — logical payload size in bytes: int32/float 4, vec2 8, vec3 12, vec4 16, string length, nil 0. Arrays and structs return the sum of their elements. SoA arrays return length * field_count * 4. VRAM textures return their allocated byte size.
- * bits_of(value) -> int32 — bytes_of(value) * 8.
- * script_bytes() -> int32 — size of the loaded bytecode in bytes (instruction count * 4). Constants are not included.
- * script_hash() -> int32 — FNV-1a hash of the bytecode words, masked to 31 bits so the result is always a non-negative int32 literal.
-
-Anti-tamper usage: the expected hash is written into the script as an integer literal. Integer literals live in the constant pool and are not part of the hashed bytecode, so changing the literal does not change the hash. Compile once with a placeholder, read script_hash(), then substitute the real value and recompile. Any edit to the bytecode itself changes the hash. Constants and strings are not covered, and a patched comparison or a patched native defeats the check, so treat it as one layer among several, not as protection by itself.
+- `@hot`: marks performance-critical functions for AOT compilation into native C99 for the MIPS R5900 cross-compiler.
+- `@scratch`: forces variable allocation to Scratchpad RAM (`0x70000000`).
+- `@vram`: automatically emits `upload()` on texture allocation.
+- `@vu0`: targets the VU0 coprocessor and checks 4 KB memory limits.
+- `arena`: scopes bump memory allocations that are cleared simultaneously on block exit.

@@ -611,35 +611,83 @@ static ValueTypeHint gen_call(Codegen *cg, MeloExpr *e, int dest_reg) {
         free_regs_to(cg, mark);
         return VT_OTHER;
     }
-    if (strcmp(name, "coro_create") == 0 && e->as.call.arg_count == 1) {
+    if (strcmp(name, "coro_create") == 0) {
+        if (e->as.call.arg_count != 1) {
+            cg_error(cg, "coro_create() requires exactly 1 argument (function)");
+            return VT_UNKNOWN;
+        }
         MeloExpr *arg = e->as.call.args[0];
-        if (arg->kind != EXPR_IDENT) {
-            cg_error(cg, "coro_create() requires a direct function name argument");
-            return VT_UNKNOWN;
+        int func_id = -1;
+        if (arg->kind == EXPR_IDENT) {
+            func_id = find_func(cg, arg->as.ident.name);
+        } else if (arg->kind == EXPR_STRING_LIT) {
+            func_id = find_func(cg, arg->as.strlit.str);
         }
-        int target_func_id = find_func(cg, arg->as.ident.name);
-        if (target_func_id < 0) {
-            cg_error(cg, "coro_create() argument is not a known function");
-            return VT_UNKNOWN;
+        if (func_id >= 0) {
+            emit(cg, MAKE_ABC(OP_CORO_CREATE, dest_reg, func_id, 0));
+        } else {
+            int mark = cg->next_reg;
+            int r = alloc_reg(cg);
+            gen_expr(cg, arg, r);
+            emit(cg, MAKE_ABC(OP_CORO_CREATE, dest_reg, r, 1));
+            free_regs_to(cg, mark);
         }
-        emit(cg, MAKE_ABC(OP_COROCREATE, dest_reg, target_func_id, 0));
-        return VT_OTHER;
+        return VT_INT32;
     }
-    if (strcmp(name, "resume") == 0 && e->as.call.arg_count == 2) {
+    if (strcmp(name, "coro_resume") == 0 || strcmp(name, "resume") == 0) {
+        if (e->as.call.arg_count < 1 || e->as.call.arg_count > 2) {
+            cg_error(cg, "coro_resume() requires 1 or 2 arguments (coroutine, [value])");
+            return VT_UNKNOWN;
+        }
         int mark = cg->next_reg;
-        int coro_reg = alloc_reg(cg);
-        gen_expr(cg, e->as.call.args[0], coro_reg);
-        int val_reg = alloc_reg(cg);
-        gen_expr(cg, e->as.call.args[1], val_reg);
-        emit(cg, MAKE_ABC(OP_RESUME, dest_reg, coro_reg, val_reg));
+        int r_coro = alloc_reg(cg);
+        gen_expr(cg, e->as.call.args[0], r_coro);
+        int r_arg = 255;
+        if (e->as.call.arg_count == 2) {
+            r_arg = alloc_reg(cg);
+            gen_expr(cg, e->as.call.args[1], r_arg);
+        }
+        emit(cg, MAKE_ABC(OP_CORO_RESUME, dest_reg, r_coro, r_arg));
         free_regs_to(cg, mark);
-        return VT_OTHER;
+        return VT_UNKNOWN;
     }
-    if (strcmp(name, "coro_status") == 0 && e->as.call.arg_count == 1) {
+    if (strcmp(name, "coro_status") == 0) {
+        if (e->as.call.arg_count != 1) {
+            cg_error(cg, "coro_status() requires exactly 1 argument (coroutine)");
+            return VT_UNKNOWN;
+        }
         int mark = cg->next_reg;
-        int coro_reg = alloc_reg(cg);
-        gen_expr(cg, e->as.call.args[0], coro_reg);
-        emit(cg, MAKE_ABC(OP_CORO_STATUS, dest_reg, coro_reg, 0));
+        int r_coro = alloc_reg(cg);
+        gen_expr(cg, e->as.call.args[0], r_coro);
+        emit(cg, MAKE_ABC(OP_CORO_STATUS, dest_reg, r_coro, 0));
+        free_regs_to(cg, mark);
+        return VT_INT32;
+    }
+    if (strcmp(name, "scratch_dma_in") == 0) {
+        if (e->as.call.arg_count != 2) {
+            cg_error(cg, "scratch_dma_in(dest_scratch, src_ram) requires 2 arguments");
+            return VT_UNKNOWN;
+        }
+        int mark = cg->next_reg;
+        int dst = alloc_reg(cg);
+        gen_expr(cg, e->as.call.args[0], dst);
+        int src = alloc_reg(cg);
+        gen_expr(cg, e->as.call.args[1], src);
+        emit(cg, MAKE_ABC(OP_SCRATCH_DMA_IN, dest_reg, dst, src));
+        free_regs_to(cg, mark);
+        return VT_INT32;
+    }
+    if (strcmp(name, "scratch_dma_out") == 0) {
+        if (e->as.call.arg_count != 2) {
+            cg_error(cg, "scratch_dma_out(dest_ram, src_scratch) requires 2 arguments");
+            return VT_UNKNOWN;
+        }
+        int mark = cg->next_reg;
+        int dst = alloc_reg(cg);
+        gen_expr(cg, e->as.call.args[0], dst);
+        int src = alloc_reg(cg);
+        gen_expr(cg, e->as.call.args[1], src);
+        emit(cg, MAKE_ABC(OP_SCRATCH_DMA_OUT, dest_reg, dst, src));
         free_regs_to(cg, mark);
         return VT_INT32;
     }
@@ -837,6 +885,58 @@ static ValueTypeHint gen_expr(Codegen *cg, MeloExpr *e, int dest_reg) {
                     }
                 }
 
+                if (target->as.field.object->kind == EXPR_FIELD &&
+                    target->as.field.object->as.field.object->kind == EXPR_INDEX) {
+                    MeloExpr *comp_field_expr = target;
+                    MeloExpr *struct_field_expr = target->as.field.object;
+                    MeloExpr *index_expr = struct_field_expr->as.field.object;
+
+                    int mark0 = cg->next_reg;
+                    int probe_reg = alloc_reg(cg);
+                    ValueTypeHint probe_arr_t = gen_expr(cg, index_expr->as.index.object, probe_reg);
+                    int probe_elem_struct_id = cg->last_elem_struct_id;
+                    ValueTypeHint probe_elem_hint = cg->last_elem_hint;
+                    free_regs_to(cg, mark0);
+
+                    if (probe_arr_t == VT_ARRAY && probe_elem_hint == VT_STRUCT &&
+                        probe_elem_struct_id >= 0 && cg->mod->structs[probe_elem_struct_id].is_soa) {
+                        int field_idx = find_struct_field(cg, probe_elem_struct_id, struct_field_expr->as.field.field);
+                        if (field_idx < 0) {
+                            cg_error(cg, "assignment to unknown struct field on #[soa] array element");
+                            return VT_UNKNOWN;
+                        }
+                        int comp = vec_component_index(comp_field_expr->as.field.field);
+                        if (comp < 0) {
+                            cg_error(cg, "invalid vector component in #[soa] assignment");
+                            return VT_UNKNOWN;
+                        }
+
+                        int mark = cg->next_reg;
+                        int arr_reg = alloc_reg(cg);
+                        gen_expr(cg, index_expr->as.index.object, arr_reg);
+
+                        int idx_reg = alloc_reg(cg);
+                        gen_expr(cg, index_expr->as.index.index, idx_reg);
+
+                        int vec_reg = alloc_reg(cg);
+                        emit(cg, MAKE_ABC(OP_SOA_GETFIELD, vec_reg, arr_reg, idx_reg));
+                        emit_raw(cg, (uint32_t)field_idx);
+
+                        int val_reg = alloc_reg(cg);
+                        ValueTypeHint val_t = gen_expr(cg, e->as.assign.value, val_reg);
+
+                        emit(cg, MAKE_ABC(OP_VSET, vec_reg, comp, val_reg));
+                        emit(cg, MAKE_ABC(OP_SOA_SETFIELD, arr_reg, idx_reg, vec_reg));
+                        emit_raw(cg, (uint32_t)field_idx);
+
+                        if (dest_reg != val_reg) {
+                            emit(cg, MAKE_ABC(OP_MOVE, dest_reg, val_reg, 0));
+                        }
+                        free_regs_to(cg, mark);
+                        return val_t;
+                    }
+                }
+
                 if (target->as.field.object->kind == EXPR_INDEX) {
                     MeloExpr *index_expr = target->as.field.object;
                     int mark0 = cg->next_reg;
@@ -1005,9 +1105,12 @@ static ValueTypeHint gen_expr(Codegen *cg, MeloExpr *e, int dest_reg) {
             return elem_hint;
         }
         case EXPR_YIELD: {
-            gen_expr(cg, e->as.yield_expr.value, dest_reg);
-            emit(cg, MAKE_ABC(OP_YIELD, dest_reg, 0, 0));
-            return VT_OTHER;
+            int mark = cg->next_reg;
+            int r = alloc_reg(cg);
+            gen_expr(cg, e->as.yield_expr.value, r);
+            emit(cg, MAKE_ABC(OP_YIELD, dest_reg, r, 0));
+            free_regs_to(cg, mark);
+            return VT_UNKNOWN;
         }
     }
     return VT_UNKNOWN;
@@ -1042,8 +1145,9 @@ static void gen_stmt(Codegen *cg, MeloStmt *s) {
             if (is_vram) {
                 MeloExpr *init_expr = s->as.var_decl.init;
                 if (init_expr->kind != EXPR_CALL ||
-                    strcmp(init_expr->as.call.callee->as.ident.name, "vram_alloc") != 0) {
-                    cg_error(cg, "@vram may only be used on a variable initialized with vram_alloc(...)");
+                    (strcmp(init_expr->as.call.callee->as.ident.name, "vram_alloc") != 0 &&
+                     strcmp(init_expr->as.call.callee->as.ident.name, "vram_alloc_paletted") != 0)) {
+                    cg_error(cg, "@vram may only be used on a variable initialized with vram_alloc(...) or vram_alloc_paletted(...)");
                     return;
                 }
             }
@@ -1128,7 +1232,7 @@ static void gen_stmt(Codegen *cg, MeloStmt *s) {
             int mark = cg->next_reg;
             int r = alloc_reg(cg);
             gen_expr(cg, s->as.yield_stmt.value, r);
-            emit(cg, MAKE_ABC(OP_YIELD, r, 0, 0));
+            emit(cg, MAKE_ABC(OP_YIELD, r, r, 0));
             free_regs_to(cg, mark);
             break;
         }
@@ -1336,9 +1440,11 @@ static void register_structs(Codegen *cg, MeloProgram *prog) {
             ValueTypeHint h = type_hint_from_node(cg, d->as.struct_decl.fields[f].type, &field_struct_id);
             cg->struct_field_hints[struct_id][f] = h;
             cg->struct_field_struct_ids[struct_id][f] = field_struct_id;
+            cg->mod->structs[struct_id].field_types[f] = (int)h;
 
-            if (cg->mod->structs[struct_id].is_soa && h != VT_FLOAT && h != VT_INT32) {
-                cg_error(cg, "#[soa] structs currently only support float/int32 fields");
+            if (cg->mod->structs[struct_id].is_soa && h != VT_FLOAT && h != VT_INT32 &&
+                h != VT_VEC2 && h != VT_VEC3 && h != VT_VEC4) {
+                cg_error(cg, "#[soa] structs currently only support float/int32/vec2/vec3/vec4 fields");
                 return;
             }
         }
@@ -1414,6 +1520,7 @@ static void gen_function(Codegen *cg, MeloFuncDecl *fn, int func_id) {
     cg->mod->funcs[func_id].num_params = fn->param_count;
     cg->mod->funcs[func_id].num_regs = cg->max_reg_used;
     cg->mod->funcs[func_id].is_vukernel = fn->is_vukernel;
+    cg->mod->funcs[func_id].is_vu0 = fn->is_vu0;
     cg->mod->funcs[func_id].is_hot = fn->is_hot;
     snprintf(cg->mod->funcs[func_id].name, MELO_FUNC_NAME_LEN, "%s", fn->name);
 
@@ -1422,20 +1529,23 @@ static void gen_function(Codegen *cg, MeloFuncDecl *fn, int func_id) {
     if (fn->is_vukernel) {
         size_t instr_bytes = (size_t)(cg->mod->code_count - entry_pc) * sizeof(MeloInstr);
         size_t data_bytes = (size_t)cg->max_reg_used * MELO_VU_REG_SIZE;
+        int instr_limit = fn->is_vu0 ? MELO_VU0_INSTR_LIMIT : MELO_VU1_INSTR_LIMIT;
+        int data_limit = fn->is_vu0 ? MELO_VU0_DATA_LIMIT : MELO_VU1_DATA_LIMIT;
+        const char *vu_name = fn->is_vu0 ? "VU0" : "VU1";
 
-        if (instr_bytes > MELO_VU1_INSTR_LIMIT) {
+        if (instr_bytes > (size_t)instr_limit) {
             char msg[256];
             snprintf(msg, sizeof(msg),
-                     "vukernel '%s' exceeds VU1 instruction memory: %zu bytes > %d byte limit",
-                     fn->name, instr_bytes, MELO_VU1_INSTR_LIMIT);
+                     "vukernel '%s' exceeds %s instruction memory: %zu bytes > %d byte limit",
+                     fn->name, vu_name, instr_bytes, instr_limit);
             cg_error(cg, msg);
             return;
         }
-        if (data_bytes > MELO_VU1_DATA_LIMIT) {
+        if (data_bytes > (size_t)data_limit) {
             char msg[256];
             snprintf(msg, sizeof(msg),
-                     "vukernel '%s' exceeds VU1 data memory: %zu bytes > %d byte limit",
-                     fn->name, data_bytes, MELO_VU1_DATA_LIMIT);
+                     "vukernel '%s' exceeds %s data memory: %zu bytes > %d byte limit",
+                     fn->name, vu_name, data_bytes, data_limit);
             cg_error(cg, msg);
             return;
         }

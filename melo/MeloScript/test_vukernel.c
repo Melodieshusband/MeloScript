@@ -141,11 +141,74 @@ static void test_vukernel_requires_return_type(void) {
     printf("[vukernel_requires_return_type] OK (parser correctly rejected missing '->')\n");
 }
 
+static void test_vu0_kernel_basic(void) {
+    const char *src =
+        "@vu0\n"
+        "vukernel vu0_add(v: vec4) -> vec4 {\n"
+        "    return v + vec4(2.0, 2.0, 2.0, 2.0);\n"
+        "}\n"
+        "func main() -> vec4 {\n"
+        "    return vu0_add(vec4(1.0, 1.0, 1.0, 1.0));\n"
+        "}\n";
+
+    MeloVM vm;
+    MeloCompiledModule mod;
+    int rc = compile_and_run(src, &vm, &mod);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    assert(vm.reg_stack[0].as.v4.x == 3.0f);
+    assert(mod.funcs[0].is_vu0 == 1);
+    melo_codegen_free(&mod);
+    printf("[vu0_kernel_basic] OK\n");
+}
+
+static void test_vu0_kernel_instruction_limit_exceeded(void) {
+    static char src[262144];
+    int pos = 0;
+    pos += sprintf(src + pos, "@vu0\nvukernel huge_vu0(v: vec4) -> vec4 {\n");
+    pos += sprintf(src + pos, "    var acc = v;\n");
+    pos += sprintf(src + pos, "    var one = vec4(1.0, 1.0, 1.0, 1.0);\n");
+    for (int i = 0; i < 600; i++) {
+        pos += sprintf(src + pos, "    acc = acc + one;\n");
+    }
+    pos += sprintf(src + pos, "    return acc;\n}\n");
+    pos += sprintf(src + pos, "func main() -> vec4 {\n    return huge_vu0(vec4(0.0,0.0,0.0,0.0));\n}\n");
+
+    MeloParser parser;
+    melo_parser_init(&parser, src);
+    MeloProgram *prog = melo_parse_program(&parser);
+    assert(!parser.had_error);
+
+    MeloCompiledModule mod;
+    int rc = melo_codegen_compile(prog, &mod);
+    assert(rc != 0);
+    assert(strstr(mod.error_msg, "VU0 instruction memory") != NULL);
+    assert(strstr(mod.error_msg, "4096 byte limit") != NULL);
+    printf("[vu0_kernel_instruction_limit_exceeded] OK (%s)\n", mod.error_msg);
+}
+
+static void test_double_type_prohibited(void) {
+    const char *src =
+        "func bad(x: double) -> double {\n"
+        "    return x;\n"
+        "}\n";
+
+    MeloParser parser;
+    melo_parser_init(&parser, src);
+    melo_parse_program(&parser);
+    assert(parser.had_error);
+    assert(strstr(parser.error_msg, "type 'double' is prohibited on PS2") != NULL);
+    printf("[double_type_prohibited] OK (%s)\n", parser.error_msg);
+}
+
 int main(void) {
     test_vukernel_basic_execution();
     test_regular_func_not_marked_vukernel();
     test_vukernel_instruction_limit_exceeded();
     test_vukernel_requires_return_type();
+    test_vu0_kernel_basic();
+    test_vu0_kernel_instruction_limit_exceeded();
+    test_double_type_prohibited();
     printf("ALL VUKERNEL TESTS PASSED\n");
     return 0;
 }

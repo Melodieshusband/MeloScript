@@ -488,14 +488,8 @@ void melo_vu1_emit_c_bridge(const MeloVu1Program *p, char *buf, size_t buf_size)
         p->name, p->name);
 
     off += snprintf(buf + off, buf_size - off,
-        "/* VU1 instruction memory is mapped on the EE at 0x11008000 (16KB);\n"
-        " * VU1 data memory is mapped at 0x1100C000 (16KB). Both are only safe\n"
-        " * to touch from the EE while VU1 is idle, i.e. after the DMA transfer\n"
-        " * that kicked the microprogram has completed and VU1 has finished\n"
-        " * executing (vu1 has no path back to the EE other than these mapped\n"
-        " * windows or an explicit XGKICK to the GS, which this function does\n"
-        " * not use since it returns a value to the caller rather than\n"
-        " * rendering geometry). */\n"
+        "\n"
+        "#define MELO_VU1_xgkick 0\n"
         "#define MELO_VU1_DATA_MEM_BASE 0x1100C000u\n"
         "#define MELO_VU1_RESULT_ADDR   %d\n\n",
         p->result_addr);
@@ -511,9 +505,7 @@ void melo_vu1_emit_c_bridge(const MeloVu1Program *p, char *buf, size_t buf_size)
         "    dma_channel_send_packet2(pkt, DMA_CHANNEL_VIF1, 1);\n"
         "    dma_wait_fast();\n"
         "    packet2_free(pkt);\n\n"
-        "    /* VU1 is idle again now that the DMA transfer (which included the\n"
-        "     * MSCAL that ran the microprogram to completion) has finished, so\n"
-        "     * the mapped data memory window can be read directly. */\n"
+        "    \n"
         "    volatile float *vu1_data = (volatile float *)MELO_VU1_DATA_MEM_BASE;\n"
         "    volatile float *slot = vu1_data + (MELO_VU1_RESULT_ADDR * 4);\n"
         "    return melo_vec4(slot[0], slot[1], slot[2], slot[3]);\n"

@@ -72,12 +72,15 @@ typedef enum {
     OP_SOA_SETFIELD,
     OP_SOA_LEN,
 
+    OP_CORO_CREATE,
+    OP_CORO_RESUME,
+    OP_CORO_STATUS,
+
     OP_ARENA_ENTER,
     OP_ARENA_EXIT,
 
-    OP_COROCREATE,
-    OP_RESUME,
-    OP_CORO_STATUS,
+    OP_SCRATCH_DMA_IN,
+    OP_SCRATCH_DMA_OUT,
 
     OP_PRINT,
 
@@ -113,8 +116,9 @@ static inline __attribute__((unused)) const char *melo_opcode_name(MeloOpcode op
         "NEWOBJECT_SCRATCH", "NEWARRAY_SCRATCH",
         "VRAM_ALLOC", "VRAM_UPLOAD", "VRAM_EVICT", "VRAM_RESIDENT",
         "NEWARRAY_SOA", "SOA_GETFIELD", "SOA_SETFIELD", "SOA_LEN",
+        "CORO_CREATE", "CORO_RESUME", "CORO_STATUS",
         "ARENA_ENTER", "ARENA_EXIT",
-        "COROCREATE", "RESUME", "CORO_STATUS",
+        "SCRATCH_DMA_IN", "SCRATCH_DMA_OUT",
         "PRINT",
         "HALT"
     };

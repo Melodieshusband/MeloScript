@@ -236,6 +236,40 @@ static void test_scratch_opcode_used(void) {
     melo_codegen_free(&mod);
 }
 
+static void test_scratch_base_mapping(void) {
+    MeloVM vm;
+    melo_vm_init(&vm, NULL, 0);
+    uint8_t *base = melo_vm_scratch_base(&vm);
+#if defined(MELO_PS2_TARGET) || defined(__mips__)
+    assert((uintptr_t)base == 0x70000000);
+#else
+    assert(base == vm.scratch_mem);
+#endif
+    printf("[scratch_base_mapping] OK\n");
+}
+
+static void test_scratch_dma_in_and_out(void) {
+    const char *src =
+        "func main() -> int32 {\n"
+        "    var src = array<int32, 4>(10, 20, 30, 40);\n"
+        "    @scratch var spr = array<int32, 4>();\n"
+        "    scratch_dma_in(spr, src);\n"
+        "    spr[2] = 999;\n"
+        "    var dst = array<int32, 4>();\n"
+        "    scratch_dma_out(dst, spr);\n"
+        "    return dst[0] + dst[2];\n"
+        "}\n";
+
+    MeloVM vm;
+    MeloCompiledModule mod;
+    int rc = compile_and_run(src, &vm, &mod);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    assert(vm.reg_stack[0].as.i32 == 1009);
+    printf("[scratch_dma_in_and_out] OK (result=%d)\n", vm.reg_stack[0].as.i32);
+    melo_codegen_free(&mod);
+}
+
 int main(void) {
     test_scratch_array_basic();
     test_scratch_alignment();
@@ -247,6 +281,8 @@ int main(void) {
     test_scratch_rejects_scalar();
     test_scratch_rejects_vec4();
     test_scratch_opcode_used();
+    test_scratch_base_mapping();
+    test_scratch_dma_in_and_out();
     printf("ALL SCRATCH TESTS PASSED\n");
     return 0;
 }

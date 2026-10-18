@@ -93,6 +93,12 @@ static MeloTypeNode *parse_type(MeloParser *p) {
         else if (strcmp(name, "mat4") == 0) t->kind = TYPE_MAT4;
         else if (strcmp(name, "string") == 0) t->kind = TYPE_STRING;
         else if (strcmp(name, "bool") == 0) t->kind = TYPE_BOOL;
+        else if (strcmp(name, "double") == 0) {
+            parser_error(p, "type 'double' is prohibited on PS2: use 'float' (32-bit single precision)");
+            free(name);
+            t->kind = TYPE_VOID;
+            return t;
+        }
         else if (strcmp(name, "array") == 0) {
             t->kind = TYPE_ARRAY;
             expect(p, TOK_LT, "expected '<' after 'array'");
@@ -120,7 +126,6 @@ static MeloTypeNode *parse_type(MeloParser *p) {
 }
 
 static MeloExpr *parse_expr(MeloParser *p);
-static MeloExpr *parse_assignment(MeloParser *p);
 
 static MeloExpr *new_expr(MeloExprKind kind, int line) {
     MeloExpr *e = calloc(1, sizeof(MeloExpr));
@@ -225,6 +230,11 @@ static MeloExpr *parse_primary(MeloParser *p) {
         expect(p, TOK_RPAREN, "expected ')' after expression");
         return e;
     }
+    if (match_tok(p, TOK_YIELD)) {
+        MeloExpr *e = new_expr(EXPR_YIELD, line);
+        e->as.yield_expr.value = parse_expr(p);
+        return e;
+    }
 
     parser_error(p, "expected expression");
     return new_expr(EXPR_INT_LIT, line);
@@ -273,11 +283,6 @@ static MeloExpr *parse_unary(MeloParser *p) {
         MeloExpr *e = new_expr(EXPR_UNARY, line);
         e->as.unary.op = '!';
         e->as.unary.operand = parse_unary(p);
-        return e;
-    }
-    if (match_tok(p, TOK_YIELD)) {
-        MeloExpr *e = new_expr(EXPR_YIELD, line);
-        e->as.yield_expr.value = parse_assignment(p);
         return e;
     }
     return parse_postfix(p);
@@ -635,7 +640,7 @@ static MeloTopDecl parse_func_decl(MeloParser *p, MeloAnnotation *anns, int ann_
     return decl;
 }
 
-static MeloTopDecl parse_vukernel_decl(MeloParser *p) {
+static MeloTopDecl parse_vukernel_decl(MeloParser *p, MeloAnnotation *anns, int ann_count) {
     advance_tok(p);
     expect(p, TOK_IDENT, "expected vukernel name");
     char *name = str_dup_n(p->previous.start, p->previous.length);
@@ -657,10 +662,16 @@ static MeloTopDecl parse_vukernel_decl(MeloParser *p) {
     decl.as.func.param_count = param_count;
     decl.as.func.return_type = ret_type;
     decl.as.func.body = body;
-    decl.as.func.annotations = NULL;
-    decl.as.func.annotation_count = 0;
+    decl.as.func.annotations = anns;
+    decl.as.func.annotation_count = ann_count;
     decl.as.func.is_vukernel = 1;
+    decl.as.func.is_vu0 = 0;
     decl.as.func.is_hot = 0;
+    for (int i = 0; i < ann_count; i++) {
+        if (strcmp(anns[i].name, "vu0") == 0) {
+            decl.as.func.is_vu0 = 1;
+        }
+    }
     return decl;
 }
 
@@ -719,7 +730,7 @@ MeloProgram *melo_parse_program(MeloParser *p) {
         } else if (check(p, TOK_STRUCT)) {
             decls[count++] = parse_struct_decl(p, anns, ann_count);
         } else if (check(p, TOK_VUKERNEL)) {
-            decls[count++] = parse_vukernel_decl(p);
+            decls[count++] = parse_vukernel_decl(p, anns, ann_count);
         } else {
             parser_error(p, "expected 'func', 'struct' or 'vukernel' at top level");
             break;

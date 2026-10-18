@@ -94,6 +94,7 @@ typedef struct {
     MeloAnnotation *annotations;
     int annotation_count;
     int is_vukernel;
+    int is_vu0;
     int is_hot;
 } MeloFuncDecl;
 

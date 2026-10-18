@@ -124,15 +124,42 @@ static void test_soa_len(void) {
     melo_codegen_free(&mod);
 }
 
-static void test_soa_rejects_vec_fields(void) {
+static void test_soa_vector_fields(void) {
     const char *src =
         "#[soa]\n"
         "struct Particle {\n"
-        "    position: vec3,\n"
+        "    pos: vec3,\n"
+        "    vel: vec3,\n"
+        "    color: int32,\n"
         "}\n"
-        "func main() -> int32 {\n"
-        "    return 0;\n"
+        "func main() -> float {\n"
+        "    var particles = array<Particle, 2>(\n"
+        "        Particle(vec3(1.0, 2.0, 3.0), vec3(0.1, 0.2, 0.3), 255),\n"
+        "        Particle(vec3(4.0, 5.0, 6.0), vec3(0.4, 0.5, 0.6), 128)\n"
+        "    );\n"
+        "    particles[0].pos.x = 99.0;\n"
+        "    var p0 = particles[0].pos;\n"
+        "    return p0.x + particles[1].pos.y;\n"
         "}\n";
+
+    MeloVM vm;
+    MeloCompiledModule mod;
+    int rc = compile_and_run(src, &vm, &mod);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    assert(vm.reg_stack[0].as.f32 == 104.0f);
+    printf("[soa_vector_fields] OK (result=%g)\n", vm.reg_stack[0].as.f32);
+    melo_codegen_free(&mod);
+}
+
+static void test_soa_rejects_nested_struct_fields(void) {
+    const char *src =
+        "struct Inner { x: float }\n"
+        "#[soa]\n"
+        "struct Particle {\n"
+        "    sub: Inner,\n"
+        "}\n"
+        "func main() -> int32 { return 0; }\n";
 
     MeloParser parser;
     melo_parser_init(&parser, src);
@@ -141,7 +168,7 @@ static void test_soa_rejects_vec_fields(void) {
     MeloCompiledModule mod;
     int err = melo_codegen_compile(prog, &mod);
     assert(err != 0);
-    printf("[soa_rejects_vec_fields] OK (%s)\n", mod.error_msg);
+    printf("[soa_rejects_nested_struct_fields] OK (%s)\n", mod.error_msg);
 }
 
 static void test_soa_rejects_non_constructor_elements(void) {
@@ -244,7 +271,8 @@ int main(void) {
     test_soa_basic_read();
     test_soa_write();
     test_soa_len();
-    test_soa_rejects_vec_fields();
+    test_soa_vector_fields();
+    test_soa_rejects_nested_struct_fields();
     test_soa_rejects_non_constructor_elements();
     test_non_soa_struct_array_still_works();
     test_soa_index_out_of_bounds();

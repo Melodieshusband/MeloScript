@@ -16,9 +16,15 @@ typedef struct {
     size_t   offset;
 } MeloArena;
 
+#if defined(MELO_PS2_TARGET) || defined(__mips__)
+#define MELO_ARENA_POOL_COUNT 4
+#define MELO_ARENA_POOL_SIZE  (16 * 1024)
+#define MELO_ARENA_MAX_DEPTH  8
+#else
 #define MELO_ARENA_POOL_COUNT 16
-#define MELO_ARENA_POOL_SIZE  (64 * 1024)
+#define MELO_ARENA_POOL_SIZE  (32 * 1024)
 #define MELO_ARENA_MAX_DEPTH  16
+#endif
 
 typedef struct {
     int base;
@@ -27,8 +33,14 @@ typedef struct {
     int func_id;
 } MeloFrame;
 
+#if defined(MELO_PS2_TARGET) || defined(__mips__)
+#define MELO_REG_STACK_SIZE 512
+#else
 #define MELO_REG_STACK_SIZE 1024
+#endif
 
+#define MELO_VU0_INSTR_LIMIT (4 * 1024)
+#define MELO_VU0_DATA_LIMIT  (4 * 1024)
 #define MELO_VU1_INSTR_LIMIT (16 * 1024)
 #define MELO_VU1_DATA_LIMIT  (16 * 1024)
 #define MELO_VU_REG_SIZE     16
@@ -45,6 +57,7 @@ typedef struct {
     int num_params;
     int num_regs;
     int is_vukernel;
+    int is_vu0;
     int is_hot;
     uint32_t hot_call_count;
     MeloAotFn aot_fn;
@@ -73,9 +86,14 @@ typedef struct {
     char field_names[MELO_MAX_STRUCT_FIELDS][32];
     int field_count;
     int is_soa;
+    int field_types[MELO_MAX_STRUCT_FIELDS];
 } MeloStructInfo;
 
+#if defined(MELO_PS2_TARGET) || defined(__mips__)
+#define MELO_OBJECT_HEAP_SIZE (64 * 1024)
+#else
 #define MELO_OBJECT_HEAP_SIZE (128 * 1024)
+#endif
 
 #define MELO_SCRATCH_SIZE (16 * 1024)
 
@@ -89,8 +107,13 @@ typedef struct {
     uint32_t size;
 } MeloVramFreeBlock;
 
+#if defined(MELO_PS2_TARGET) || defined(__mips__)
+#define MELO_MAX_COROUTINES 4
+#define MELO_CORO_REG_STACK_SIZE 64
+#else
 #define MELO_MAX_COROUTINES 16
-#define MELO_CORO_REG_STACK_SIZE 256
+#define MELO_CORO_REG_STACK_SIZE 128
+#endif
 
 typedef enum {
     MELO_CORO_DEAD = 0,
@@ -148,7 +171,9 @@ struct MeloVM {
     __attribute__((aligned(16))) uint8_t object_heap[MELO_OBJECT_HEAP_SIZE];
     size_t object_heap_offset;
 
+#if !defined(MELO_PS2_TARGET) && !defined(__mips__)
     __attribute__((aligned(16))) uint8_t scratch_mem[MELO_SCRATCH_SIZE];
+#endif
     size_t scratch_offset;
     size_t scratch_high_water;
 
@@ -183,8 +208,12 @@ MeloSoAArray *melo_vm_alloc_soa_array(MeloVM *vm, int32_t struct_id, int32_t fie
 MeloObject *melo_vm_alloc_object_scratch(MeloVM *vm, int32_t struct_id, int32_t field_count);
 MeloArrayObj *melo_vm_alloc_array_scratch(MeloVM *vm, int32_t capacity);
 void melo_vm_scratch_reset(MeloVM *vm);
+uint8_t *melo_vm_scratch_base(MeloVM *vm);
+int melo_vm_scratch_dma_in(MeloVM *vm, MeloArrayObj *dest_scratch, const MeloArrayObj *src_ram);
+int melo_vm_scratch_dma_out(MeloVM *vm, MeloArrayObj *dest_ram, const MeloArrayObj *src_scratch);
 
 MeloVramTex *melo_vm_vram_alloc(MeloVM *vm, uint32_t width, uint32_t height, uint32_t bytes_per_pixel);
+MeloVramTex *melo_vm_vram_alloc_format(MeloVM *vm, uint32_t width, uint32_t height, uint32_t bpp);
 int  melo_vm_vram_upload(MeloVM *vm, MeloVramTex *tex);
 void melo_vm_vram_evict(MeloVM *vm, MeloVramTex *tex);
 void melo_vm_vram_free(MeloVM *vm, MeloVramTex *tex);

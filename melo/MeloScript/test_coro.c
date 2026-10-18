@@ -235,6 +235,102 @@ static void test_coro_status_transitions(void) {
     printf("[coro_status_transitions] OK\n");
 }
 
+static void test_coro_in_script_basic(void) {
+    const char *src =
+        "func counter() -> int32 {\n"
+        "    yield 10;\n"
+        "    yield 20;\n"
+        "    return 30;\n"
+        "}\n"
+        "func main() -> int32 {\n"
+        "    var c = coro_create(counter);\n"
+        "    var a = coro_resume(c);\n"
+        "    var b = coro_resume(c);\n"
+        "    var d = coro_resume(c);\n"
+        "    return a + b + d;\n"
+        "}\n";
+
+    MeloCompiledModule mod;
+    assert(compile_module(src, &mod) == 0);
+
+    MeloVM vm;
+    setup_vm_from_module(&vm, &mod);
+    vm.code = mod.funcs[mod.main_func_id].entry;
+
+    int rc = melo_vm_run(&vm);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    assert(vm.reg_stack[0].as.i32 == 60);
+
+    printf("[coro_in_script_basic] OK (sum=60)\n");
+}
+
+static void test_coro_in_script_status(void) {
+    const char *src =
+        "func task() -> int32 {\n"
+        "    yield 1;\n"
+        "    return 2;\n"
+        "}\n"
+        "func main() -> int32 {\n"
+        "    var c = coro_create(task);\n"
+        "    var s1 = coro_status(c);\n"
+        "    var r1 = coro_resume(c);\n"
+        "    var s2 = coro_status(c);\n"
+        "    var r2 = coro_resume(c);\n"
+        "    var s3 = coro_status(c);\n"
+        "    return s1 * 100 + s2 * 10 + s3;\n"
+        "}\n";
+
+    MeloCompiledModule mod;
+    assert(compile_module(src, &mod) == 0);
+
+    MeloVM vm;
+    setup_vm_from_module(&vm, &mod);
+    vm.code = mod.funcs[mod.main_func_id].entry;
+
+    int rc = melo_vm_run(&vm);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    assert(vm.reg_stack[0].as.i32 == 113);
+
+    printf("[coro_in_script_status] OK\n");
+}
+
+static void test_coro_in_script_interleaved(void) {
+    const char *src =
+        "func gen_a() -> int32 {\n"
+        "    yield 100;\n"
+        "    return 200;\n"
+        "}\n"
+        "func gen_b() -> int32 {\n"
+        "    yield 1000;\n"
+        "    return 2000;\n"
+        "}\n"
+        "func main() -> int32 {\n"
+        "    var ca = coro_create(gen_a);\n"
+        "    var cb = coro_create(gen_b);\n"
+        "    var a1 = coro_resume(ca);\n"
+        "    var b1 = coro_resume(cb);\n"
+        "    var a2 = coro_resume(ca);\n"
+        "    var b2 = coro_resume(cb);\n"
+        "    return a1 + b1 + a2 + b2;\n"
+        "}\n";
+
+    MeloCompiledModule mod;
+    assert(compile_module(src, &mod) == 0);
+
+    MeloVM vm;
+    setup_vm_from_module(&vm, &mod);
+    vm.code = mod.funcs[mod.main_func_id].entry;
+
+    int rc = melo_vm_run(&vm);
+    assert(rc == 0);
+    assert(vm.error == 0);
+    assert(vm.reg_stack[0].as.i32 == 3300);
+
+    printf("[coro_in_script_interleaved] OK (interleaved sum=3300)\n");
+}
+
 int main(void) {
     (void)find_func_id;
     test_coro_single_yield();
@@ -243,6 +339,9 @@ int main(void) {
     test_coro_yield_outside_coroutine_is_error();
     test_coro_multiple_independent_coroutines();
     test_coro_status_transitions();
+    test_coro_in_script_basic();
+    test_coro_in_script_status();
+    test_coro_in_script_interleaved();
     printf("ALL COROUTINE TESTS PASSED\n");
     return 0;
 }
